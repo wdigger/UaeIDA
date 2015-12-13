@@ -403,7 +403,7 @@
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>..\..\include;..\..;..\;..\resources;..\osdep;..\sounddep;..\..\prowizard\include;..\..\slirp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\include;..\..;..\;..\resources;..\osdep;..\sounddep;..\..\prowizard\include;..\..\slirp;..\..\winuaeinclibs\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WINVER=0x0601;_WIN32_IE=0x0700;WIN32;UAE;WINUAE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -437,7 +437,7 @@
       <AdditionalDependencies>ws2_32.lib;ddraw.lib;dxguid.lib;winmm.lib;comctl32.lib;version.lib;msacm32.lib;dsound.lib;dinput8.lib;d3d9.lib;d3dx9.lib;winio.lib;setupapi.lib;wininet.lib;dxerr.lib;shlwapi.lib;libpng16.lib;lglcd.lib;wpcap.lib;packet.lib;openal32.lib;portaudio_x86.lib;vfw32.lib;wtsapi32.lib;enet.lib;lzmalib.lib;prowizard.lib;libFLAC_static.lib;Avrt.lib;hid.lib;zlibstat.lib;Iphlpapi.lib;luastatic.lib;libmpeg2_ff.lib;softfloat.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(SolutionDir)\..\lib\</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(SolutionDir)\..\lib\;..\..\winuaeinclibs\lib</AdditionalLibraryDirectories>
       <AdditionalManifestDependencies>%(AdditionalManifestDependencies)</AdditionalManifestDependencies>
       <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <DelayLoadDLLs>wpcap.dll;packet.dll;d3dx9_43.dll;openal32.dll;portaudio_x86.dll;ws2_32.dll;msacm32.dll;wtsapi32.dll;dsound.dll;wininet.dll;avrt.dll;ddraw.dll;Iphlpapi.dll;%(DelayLoadDLLs)</DelayLoadDLLs>

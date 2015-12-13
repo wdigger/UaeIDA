@@ -149,6 +149,7 @@ del genlinetoscr.exe
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>..\..\include;..\..;..\</AdditionalIncludeDirectories>
     </ClCompile>
     <PreLinkEvent>
       <Message>deleteing linetoscr.cpp</Message>
