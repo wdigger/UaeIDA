@@ -28,7 +28,7 @@ extern int debugger_active;
 extern int debug_illegal;
 extern uae_u64 debug_illegal_mask;
 
-extern void debug (void);
+extern void debug_ (void);
 extern void debugger_change (int mode);
 extern void activate_debugger (void);
 extern void deactivate_debugger (void);

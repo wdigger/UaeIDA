@@ -3567,7 +3567,7 @@ static bool haltloop(void)
 							unset_special(SPCFLAG_BRK);
 #ifdef DEBUGGER
 							if (debugging)
-								debug();
+								debug_();
 #endif
 						}
 						return true;
@@ -3841,7 +3841,7 @@ static int do_specialties (int cycles)
 		unset_special(SPCFLAG_BRK);
 #ifdef DEBUGGER
 		if (debugging) {
-			debug();
+			debug_();
 			if (regs.stopped)
 				goto isstopped;
 		}
@@ -5311,7 +5311,7 @@ void m68k_go (int may_quit)
 
 #ifdef DEBUGGER
 		if (debugging)
-			debug ();
+			debug_ ();
 #endif
 		if (regs.spcflags & SPCFLAG_MODE_CHANGE) {
 			if (cpu_prefs_changed_flag & 1) {

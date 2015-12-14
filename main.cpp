@@ -738,12 +738,27 @@ void uae_reset (int hardreset, int keyboardreset)
 
 }
 
+#ifdef C_IDA_DEBUG
+#include "ida_debmod.h"
+extern eventlist_t g_events;
+#endif
+
 void uae_quit (void)
 {
 	deactivate_debugger ();
 	if (quit_program != -UAE_QUIT)
 		quit_program = -UAE_QUIT;
 	target_quit ();
+
+#ifdef C_IDA_DEBUG
+	debug_event_t ev;
+	ev.eid = PROCESS_EXIT;
+	ev.pid = 1;
+	ev.handled = true;
+	ev.exit_code = 0;
+
+	g_events.enqueue(ev, IN_BACK);
+#endif
 }
 
 /* 0 = normal, 1 = nogui, -1 = disable nogui */

@@ -44,9 +44,19 @@
 #include "uae/io.h"
 #include "uae/ppc.h"
 
+#ifdef C_IDA_DEBUG
+#include "ida_debmod.h"
+extern eventlist_t g_events;
+char proc_name[2048];
+bool proc_found = false;
+#endif
+
 int debugger_active;
 static uaecptr skipaddr_start, skipaddr_end;
-static int skipaddr_doskip;
+#ifndef C_IDA_DEBUG
+static
+#endif
+int skipaddr_doskip;
 static uae_u32 skipins;
 static int do_skip;
 static int debug_rewind;
@@ -84,6 +94,19 @@ void deactivate_debugger (void)
 
 void activate_debugger (void)
 {
+#ifdef C_IDA_DEBUG
+	if (proc_found)
+	{
+		debug_event_t ev;
+		ev.pid = 1;
+		ev.tid = 1;
+		ev.ea = m68k_getpc();
+		ev.handled = true;
+		ev.eid = PROCESS_SUSPEND;
+		g_events.enqueue(ev, IN_BACK);
+	}
+#endif
+
 	do_skip = 0;
 	if (debugger_active)
 		return;
@@ -279,7 +302,10 @@ uae_u32 get_ilong_debug (uaecptr addr)
 	}
 }
 
-static int safe_addr (uaecptr addr, int size)
+#ifndef C_IDA_DEBUG
+static
+#endif
+int safe_addr (uaecptr addr, int size)
 {
 	if (debug_mmu_mode) {
 		flagtype olds = regs.s;
@@ -3181,6 +3207,29 @@ static void print_task_info (uaecptr node, bool nonactive)
 		uae_u32 pc = get_long_debug(sp);
 		console_out_f(_T("          SP: %08x PC: %08x\n"), sp, pc);
 	}
+
+#ifdef C_IDA_DEBUG
+	char *name = (char*)get_real_address(get_long_debug(node + 10));
+	if (strnicmp(name, proc_name, sizeof(proc_name)) == 0)
+	{
+		debug_event_t ev;
+		ev.eid = PROCESS_START;
+		ev.pid = 1;
+		ev.tid = 1;
+		ev.ea = m68k_getpc();
+		ev.handled = true;
+
+		qstrncpy(ev.modinfo.name, name, sizeof(ev.modinfo.name));
+
+		ev.modinfo.base = ev.ea;
+		ev.modinfo.size = 0;
+		ev.modinfo.rebase_to = ev.ea;
+
+		g_events.enqueue(ev, IN_BACK);
+
+		proc_found = true;
+	}
+#endif
 }
 
 static void show_exec_tasks (void)
@@ -4692,7 +4741,7 @@ static void debug_continue(void)
 }
 
 
-void debug (void)
+void debug_ (void)
 {
 	int i;
 	int wasactive;

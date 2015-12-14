@@ -823,10 +823,10 @@
     <ClCompile Include="..\..\support\time.cpp">
       <Filter>support</Filter>
     </ClCompile>
-    <ClCompile Include="plugin.cpp">
+    <ClCompile Include="..\..\uaeida\ida_debug.cpp">
       <Filter>uaeida</Filter>
     </ClCompile>
-    <ClCompile Include="debug.cpp">
+    <ClCompile Include="..\..\uaeida\ida_plugin.cpp">
       <Filter>uaeida</Filter>
     </ClCompile>
   </ItemGroup>
@@ -945,5 +945,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\resources\resource.h" />
+    <ClInclude Include="..\..\uaeida\ida_debmod.h">
+      <Filter>uaeida</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\uaeida\ida_plugin.h">
+      <Filter>uaeida</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
