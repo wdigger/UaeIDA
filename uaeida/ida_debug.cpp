@@ -124,30 +124,18 @@ static int idaapi uae_process(void *ud)
 
 static void process_pause()
 {
-	activate_debugger();
-	//close_console();
+
 }
 
 static void process_continue()
 {
-	deactivate_debugger();
-	close_console();
+
 }
 
 static void process_exit()
 {
 	uae_quit();
 	deactivate_debugger();
-}
-
-extern int skipaddr_doskip;
-extern int no_trace_exceptions;
-static void process_step_into()
-{
-	set_special(SPCFLAG_BRK);
-	skipaddr_doskip = 1;
-	exception_debugging = 1;
-	no_trace_exceptions = 0;
 }
 
 /// Start an executable to debug.
@@ -196,7 +184,6 @@ static void idaapi rebase_if_required_to(ea_t new_base)
 /// \retval -1  network error
 static int idaapi prepare_to_pause_process(void)
 {
-	process_pause();
 	return 1;
 }
 
@@ -211,7 +198,6 @@ static int idaapi prepare_to_pause_process(void)
 /// \retval -1  network error
 static int idaapi uae_exit_process(void)
 {
-	process_exit();
 	return 1;
 }
 
@@ -229,8 +215,6 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 		// are there any pending events?
 		if (g_events.retrieve(event))
 		{
-			if (event->eid != STEP && event->eid != PROCESS_SUSPEND && event->eid != PROCESS_EXIT)
-				process_pause();
 			return g_events.empty() ? GDE_ONE_EVENT : GDE_MANY_EVENTS;
 		}
 		if (g_events.empty())
@@ -246,8 +230,6 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 /// \retval -1  network error
 static int idaapi continue_after_event(const debug_event_t *event)
 {
-	if (event->eid != PROCESS_START)
-		process_continue();
 	return 1;
 }
 
@@ -292,7 +274,7 @@ static int idaapi uae_set_resume_mode(thid_t tid, resume_mode_t resmod)
 	switch (resmod)
 	{
 	case RESMOD_INTO:
-		process_step_into();
+		
 		break;
 	}
 
@@ -376,7 +358,6 @@ static int idaapi get_memory_info(meminfo_vec_t &areas)
 extern int safe_addr(uaecptr addr, int size);
 static ssize_t idaapi read_memory(ea_t ea, void *buffer, size_t size)
 {
-	show_wait_box("HIDECANCEL\nReading memory...");
 	for (size_t i = 0; i < size; ++i)
 	{
 		uae_u8 v = 0;
@@ -384,7 +365,6 @@ static ssize_t idaapi read_memory(ea_t ea, void *buffer, size_t size)
 			v = byteget(ea + i);
 		((uae_u8*)buffer)[i] = v;
 	}
-	hide_wait_box();
 
 	return size;
 }

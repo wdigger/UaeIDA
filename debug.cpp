@@ -53,10 +53,7 @@ bool proc_found = false;
 
 int debugger_active;
 static uaecptr skipaddr_start, skipaddr_end;
-#ifndef C_IDA_DEBUG
-static
-#endif
-int skipaddr_doskip;
+static int skipaddr_doskip;
 static uae_u32 skipins;
 static int do_skip;
 static int debug_rewind;
@@ -94,19 +91,6 @@ void deactivate_debugger (void)
 
 void activate_debugger (void)
 {
-#ifdef C_IDA_DEBUG
-	if (proc_found)
-	{
-		debug_event_t ev;
-		ev.pid = 1;
-		ev.tid = 1;
-		ev.ea = m68k_getpc();
-		ev.handled = true;
-		ev.eid = PROCESS_SUSPEND;
-		g_events.enqueue(ev, IN_BACK);
-	}
-#endif
-
 	do_skip = 0;
 	if (debugger_active)
 		return;
@@ -4740,7 +4724,7 @@ static void debug_continue(void)
 	set_special (SPCFLAG_BRK);
 }
 
-
+bool step_cpu = false;
 void debug_ (void)
 {
 	int i;
