@@ -184,6 +184,9 @@ static void idaapi rebase_if_required_to(ea_t new_base)
 /// \retval -1  network error
 static int idaapi prepare_to_pause_process(void)
 {
+	extern bool handled_ida_event;
+	handled_ida_event = false;
+	activate_debugger();
 	return 1;
 }
 
@@ -215,6 +218,12 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 		// are there any pending events?
 		if (g_events.retrieve(event))
 		{
+			if (event->eid != STEP /*&& event->eid != BREAKPOINT*/ && event->eid != PROCESS_EXIT)
+			{
+				extern bool handled_ida_event;
+				handled_ida_event = false;
+				activate_debugger();
+			}
 			return g_events.empty() ? GDE_ONE_EVENT : GDE_MANY_EVENTS;
 		}
 		if (g_events.empty())
@@ -230,6 +239,25 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 /// \retval -1  network error
 static int idaapi continue_after_event(const debug_event_t *event)
 {
+	switch (event->eid)
+	{
+	case BREAKPOINT:
+	case STEP:
+	case PROCESS_SUSPEND:
+	{
+		dbg_notification_t n = get_running_notification();
+		switch (n)
+		{
+		case dbg_null:
+			deactivate_debugger();
+			break;
+		}
+	} break;
+	case PROCESS_EXIT:
+		process_exit();
+		break;
+	}
+
 	return 1;
 }
 
@@ -271,10 +299,26 @@ static int idaapi thread_continue(thid_t tid)
 
 static int idaapi uae_set_resume_mode(thid_t tid, resume_mode_t resmod)
 {
+	extern BOOL useinternalcmd;
+	extern TCHAR internalcmd[MAX_LINEWIDTH + 1];
+	extern int inputfinished;
+
 	switch (resmod)
 	{
 	case RESMOD_INTO:
-		
+		_tcscpy(internalcmd, _T("t"));
+		useinternalcmd = TRUE;
+		inputfinished = 1;
+		break;
+	case RESMOD_OVER:
+		_tcscpy(internalcmd, _T("z"));
+		useinternalcmd = TRUE;
+		inputfinished = 1;
+		break;
+	case RESMOD_OUT:
+		_tcscpy(internalcmd, _T("fi"));
+		useinternalcmd = TRUE;
+		inputfinished = 1;
 		break;
 	}
 
@@ -361,7 +405,7 @@ static ssize_t idaapi read_memory(ea_t ea, void *buffer, size_t size)
 	for (size_t i = 0; i < size; ++i)
 	{
 		uae_u8 v = 0;
-		if (safe_addr(ea + i, 1))
+		//if (safe_addr(ea + i, 1))
 			v = byteget(ea + i);
 		((uae_u8*)buffer)[i] = v;
 	}
@@ -398,8 +442,100 @@ static int idaapi is_ok_bpt(bpttype_t type, ea_t ea, int len)
 /// bpts array contains nadd bpts to add, followed by ndel bpts to del.
 /// This function is called from debthread.
 /// \return number of successfully modified bpts, -1 if network error
+static int memwatches_count = 0;
 static int idaapi update_bpts(update_bpt_info_t *bpts, int nadd, int ndel)
 {
+	struct memwatch_node *mwn;
+	struct breakpoint_node *bpn;
+	int i, j;
+
+	for (j = 0; j < nadd; ++j)
+	{
+		switch (bpts[j].type)
+		{
+		case BPT_EXEC:
+		{
+			for (i = 0; i < BREAKPOINT_TOTAL; i++) {
+				bpn = &bpnodes[i];
+				if (bpn->enabled)
+					continue;
+				bpn->addr = bpts[j].ea;
+				bpn->enabled = 1;
+				break;
+			}
+		} break;
+		case BPT_READ:
+		case BPT_WRITE:
+		case BPT_RDWR:
+		{
+			extern void initialize_memwatch(int mode);
+			extern void memwatch_setup(void);
+
+			if (!memwatch_enabled)
+				initialize_memwatch(0);
+
+			if (memwatches_count < 0 || memwatches_count >= MEMWATCH_TOTAL)
+				continue;
+
+			mwn = &mwnodes[memwatches_count++];
+			mwn->addr = bpts[j].ea;
+			mwn->size = bpts[j].size;
+
+			switch (bpts[j].type)
+			{
+			case BPT_READ:
+				mwn->rwi = 1;
+				break;
+			case BPT_WRITE:
+				mwn->rwi = 2;
+				break;
+			case BPT_RDWR:
+				mwn->rwi = 3;
+				break;
+			}
+			mwn->val_enabled = 0;
+			mwn->val_mask = 0xffffffff;
+			mwn->val = 0;
+			mwn->access_mask = MW_MASK_CPU;
+			mwn->reg = 0xffffffff;
+			mwn->frozen = 0;
+			mwn->modval_written = 0;
+
+			memwatch_setup();
+		} break;
+		}
+	}
+
+	for (j = nadd; j < nadd + ndel; ++j)
+	{
+		switch (bpts[j].type)
+		{
+		case BPT_EXEC:
+			for (int i = 0; i < BREAKPOINT_TOTAL; i++) {
+				bpn = &bpnodes[i];
+				if (bpn->enabled && bpn->addr == bpts[j].ea) {
+					bpn->enabled = 0;
+					break;
+				}
+			}
+			break;
+		case BPT_READ:
+		case BPT_WRITE:
+		case BPT_RDWR:
+		{
+			for (int i = 0; i < memwatches_count; ++i)
+			{
+				mwn = &mwnodes[i];
+				if (mwn->addr == bpts[j].ea)
+				{
+					mwn->size = 0;
+					break;
+				}
+			}
+		} break;
+		}
+	}
+
 	return (nadd + ndel);
 }
 

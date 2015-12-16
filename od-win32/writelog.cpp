@@ -322,7 +322,7 @@ TCHAR *setconsolemode (TCHAR *buffer, int maxlen)
 	return ret;
 }
 
-static void console_put (const TCHAR *buffer)
+static void console_put(const TCHAR *buffer)
 {
 	if (console_buffer) {
 		if (_tcslen (console_buffer) + _tcslen (buffer) < console_buffer_size)

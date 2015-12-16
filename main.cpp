@@ -751,13 +751,17 @@ void uae_quit (void)
 	target_quit ();
 
 #ifdef C_IDA_DEBUG
-	debug_event_t ev;
-	ev.eid = PROCESS_EXIT;
-	ev.pid = 1;
-	ev.handled = true;
-	ev.exit_code = 0;
+	extern bool proc_found;
+	if (proc_found)
+	{
+		debug_event_t ev;
+		ev.eid = PROCESS_EXIT;
+		ev.pid = 1;
+		ev.handled = true;
+		ev.exit_code = 0;
 
-	g_events.enqueue(ev, IN_BACK);
+		g_events.enqueue(ev, IN_BACK);
+	}
 #endif
 }
 

@@ -49,11 +49,16 @@
 extern eventlist_t g_events;
 char proc_name[2048];
 bool proc_found = false;
+bool handled_ida_event = false;
 #endif
 
 int debugger_active;
 static uaecptr skipaddr_start, skipaddr_end;
+#ifdef C_IDA_DEBUG
+int skipaddr_doskip;
+#else
 static int skipaddr_doskip;
+#endif
 static uae_u32 skipins;
 static int do_skip;
 static int debug_rewind;
@@ -1931,7 +1936,11 @@ static void smc_free (void)
 	smc_table = NULL;
 }
 
-static void initialize_memwatch (int mode);
+#ifdef C_IDA_DEBUG
+void initialize_memwatch (int mode);
+#else
+static void initialize_memwatch(int mode);
+#endif
 static void smc_detect_init (TCHAR **c)
 {
 	int v, i;
@@ -2525,7 +2534,11 @@ static void memwatch_remap (uaecptr addr)
 	}
 }
 
+#ifdef C_IDA_DEBUG
+void memwatch_setup(void)
+#else
 static void memwatch_setup (void)
+#endif
 {
 	memwatch_reset ();
 	for (int i = 0; i < MEMWATCH_TOTAL; i++) {
@@ -2561,7 +2574,11 @@ static int deinitialize_memwatch (void)
 	return oldmode;
 }
 
+#ifdef C_IDA_DEBUG
+void initialize_memwatch(int mode)
+#else
 static void initialize_memwatch (int mode)
+#endif
 {
 	membank_total = currprefs.address_space_24 ? 256 : 65536;
 	deinitialize_memwatch ();
@@ -3212,6 +3229,15 @@ static void print_task_info (uaecptr node, bool nonactive)
 		g_events.enqueue(ev, IN_BACK);
 
 		proc_found = true;
+
+		ev.eid = PROCESS_SUSPEND;
+		ev.pid = 1;
+		ev.tid = 1;
+		ev.ea = m68k_getpc();
+		ev.handled = true;
+		g_events.enqueue(ev, IN_BACK);
+
+		handled_ida_event = true;
 	}
 #endif
 }
@@ -4682,6 +4708,20 @@ static void debug_1 (void)
 {
 	TCHAR input[MAX_LINEWIDTH];
 
+#ifdef C_IDA_DEBUG
+	if (!handled_ida_event && proc_found)
+	{
+		debug_event_t ev;
+		ev.pid = 1;
+		ev.tid = 1;
+		ev.ea = m68k_getpc();
+		ev.handled = true;
+		ev.eid = PROCESS_SUSPEND;
+		g_events.enqueue(ev, IN_BACK);
+	}
+	handled_ida_event = false;
+#endif
+
 	m68k_dumpstate (&nextpc);
 	nxdis = nextpc; nxmem = 0;
 	debugger_active = 1;
@@ -4724,7 +4764,6 @@ static void debug_continue(void)
 	set_special (SPCFLAG_BRK);
 }
 
-bool step_cpu = false;
 void debug_ (void)
 {
 	int i;
@@ -4753,6 +4792,10 @@ void debug_ (void)
 		memcpy (trace_insn_copy, regs.pc_p, 10);
 		memcpy (&trace_prev_regs, &regs, sizeof regs);
 	}
+#endif
+
+#ifdef C_IDA_DEBUG
+	handled_ida_event = false;
 #endif
 
 	if (!memwatch_triggered) {
@@ -4833,6 +4876,23 @@ void debug_ (void)
 				debug_continue();
 				return;
 			}
+
+#ifdef C_IDA_DEBUG
+			if (!handled_ida_event && proc_found)
+			{
+				debug_event_t ev;
+				ev.pid = 1;
+				ev.tid = 1;
+				ev.ea = pc;
+				ev.bpt.hea = pc;
+				ev.bpt.kea = BADADDR;
+				ev.handled = true;
+				ev.eid = BREAKPOINT;
+				g_events.enqueue(ev, IN_BACK);
+
+				handled_ida_event = true;
+			}
+#endif
 		}
 	} else {
 		console_out_f (_T("Memwatch %d: break at %08X.%c %c%c%c %08X PC=%08X "), memwatch_triggered - 1, mwhit.addr,
@@ -4851,6 +4911,21 @@ void debug_ (void)
 			debug_continue();
 			return;
 		}
+
+#ifdef C_IDA_DEBUG
+		if (!handled_ida_event && proc_found)
+		{
+			debug_event_t ev;
+			ev.pid = 1;
+			ev.tid = 1;
+			ev.ea = m68k_getpc();
+			ev.handled = true;
+			ev.eid = STEP;
+			g_events.enqueue(ev, IN_BACK);
+
+			handled_ida_event = true;
+		}
+#endif
 	}
 
 	wasactive = ismouseactive ();

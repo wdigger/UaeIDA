@@ -53,7 +53,11 @@ static TCHAR linebreak[] = {'\r', '\n', '\0'};
 #define MAXPAGES 10
 #define CLASSNAMELENGTH 50
 
+#ifdef C_IDA_DEBUG
+int inputfinished = 0;
+#else
 static int inputfinished = 0;
+#endif
 
 static WORD* dlgtmpl;
 static int reopen;
@@ -85,8 +89,13 @@ static int pstatuscolor[MAXPAGES];
 
 static int dbgwnd_minx = 800, dbgwnd_miny = 600;
 
+#ifdef C_IDA_DEBUG
+BOOL useinternalcmd = FALSE;
+TCHAR internalcmd[MAX_LINEWIDTH + 1];
+#else
 static BOOL useinternalcmd = FALSE;
 static TCHAR internalcmd[MAX_LINEWIDTH + 1];
+#endif
 
 static const TCHAR *markinstr[] = { _T("JMP"), _T("BT L"), _T("RTS"), _T("RTD"), _T("RTE"), _T("RTR"), 0 };
 static const TCHAR *ucbranch[] = { _T("BSR"), _T("JMP"), _T("JSR"), 0 };
