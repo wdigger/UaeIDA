@@ -112,7 +112,9 @@ void activate_console (void)
 {
 	if (!consoleopen)
 		return;
+#ifndef C_IDA_DEBUG
 	SetForegroundWindow (GetConsoleWindow ());
+#endif
 }
 
 static void open_console_window (void)
@@ -198,7 +200,9 @@ void reopen_console (void)
 			rc.right = x + w;
 			rc.bottom = y + h;
 			if (MonitorFromRect (&rc, MONITOR_DEFAULTTONULL) != NULL) {
+#ifndef C_IDA_DEBUG
 				SetForegroundWindow (hwnd);
+#endif
 				SetWindowPos (hwnd, HWND_TOP, x, y, w, h, SWP_NOACTIVATE);
 
 			}

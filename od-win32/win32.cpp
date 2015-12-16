@@ -686,8 +686,10 @@ static void setmouseactive2 (int active, bool allowpause)
 void setmouseactive (int active)
 {
 	monitor_off = 0;
+#ifndef C_IDA_DEBUG
 	if (active > 1)
 		SetForegroundWindow (hAmigaWnd);
+#endif
 	setmouseactive2 (active, true);
 }
 
