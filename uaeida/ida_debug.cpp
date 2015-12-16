@@ -23,6 +23,7 @@
 
 int PASCAL wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow);
 
+ea_t program_base = 0;
 eventlist_t g_events;
 qthread_t uae_thread = NULL;
 
@@ -169,7 +170,7 @@ static int idaapi start_process(const char *path, const char *args, const char *
 /// This function is called from the main thread.
 static void idaapi rebase_if_required_to(ea_t new_base)
 {
-	rebase_program(new_base, MSF_FIXONCE);
+	rebase_program(new_base - program_base, MSF_FIXONCE);
 }
 
 /// Prepare to pause the process.
@@ -201,6 +202,7 @@ static int idaapi prepare_to_pause_process(void)
 /// \retval -1  network error
 static int idaapi uae_exit_process(void)
 {
+	process_exit();
 	return 1;
 }
 
@@ -218,6 +220,9 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 		// are there any pending events?
 		if (g_events.retrieve(event))
 		{
+			if (event->eid == PROCESS_START)
+				program_base = event->ea;
+
 			if (event->eid != STEP /*&& event->eid != BREAKPOINT*/ && event->eid != PROCESS_EXIT)
 			{
 				extern bool handled_ida_event;
@@ -342,9 +347,9 @@ static int idaapi read_registers(thid_t tid, int clsmask, regval_t *values)
 		{
 			values[i].ival = m68k_dreg(regs, i);
 		}
-		for (int i = 8; i < 16; ++i)
+		for (int i = 0; i < 8; ++i)
 		{
-			values[i].ival = m68k_areg(regs, i);
+			values[8 + i].ival = m68k_areg(regs, i);
 		}
 		values[16].ival = m68k_getpc();
 		values[17].ival = regs.sr;
@@ -566,7 +571,7 @@ debugger_t debugger =
 	0, // Size of this array
 	0, // for miniidbs: use this value for the file type after attaching
 
-	DBG_RESMOD_STEP_INTO | DBG_RESMOD_STEP_OVER | DBG_RESMOD_STEP_OUT | DBG_RESMOD_STEP_USER,
+	DBG_RESMOD_STEP_INTO | DBG_RESMOD_STEP_OVER | DBG_RESMOD_STEP_OUT,
 
 	init_debugger,
 	term_debugger,

@@ -5,6 +5,7 @@
 #include <loader.hpp>
 
 #include "ida_plugin.h"
+#include "ida_fd.h"
 #define VERSION "1.0.0"
 
 extern debugger_t debugger;
@@ -55,6 +56,7 @@ static int idaapi init(void)
 		plugin_inited = true;
 		dbg_started = false;
 
+		hook_to_notification_point(HT_DBG, hook_dbg, NULL);
 		print_version();
 		return PLUGIN_KEEP;
 	}
@@ -78,6 +80,43 @@ static void idaapi term(void)
 // The plugin method - usually is not used for debugger plugins
 static void idaapi run(int /*arg*/)
 {
+	ea_t ea = get_screen_ea();
+	if (dbg_started && isEnabled(ea)) // address belongs to disassembly
+	{
+		if (decode_insn(ea))
+		{
+			if (cmd.itype == 0x75) // jsr
+			{
+				if (cmd.Op1.type == o_displ &&
+					cmd.Op1.dtyp == dt_word &&
+					cmd.Op1.flags == OF_SHOW &&
+					cmd.Op1.reg == 0xE) // a6
+				{
+					char fd_name[256], func_name[256], cmt[256];
+
+					regval_t reg;
+					const char *reg_name = dbg->registers(8 /*Dx*/ + 6 /*a6*/).name;
+
+					if (get_reg_val(reg_name, &reg))
+					{
+						get_fd_lib_name(reg.ival, fd_name, sizeof(fd_name));
+
+						if (fd_name[0] != '\0')
+						{
+							get_fd_func_name(fd_name, cmd.Op1.addr, func_name, sizeof(func_name));
+
+							if (func_name[0] != '\0')
+							{
+								qsnprintf(cmt, sizeof(cmt), "%s->%s", fd_name, func_name);
+
+								set_cmt(ea, cmt, false);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 //--------------------------------------------------------------------------
@@ -96,7 +135,7 @@ NAME " debugger plugin by Dr. MefistO.\n"
 plugin_t PLUGIN =
 {
 	IDP_INTERFACE_VERSION,
-	PLUGIN_PROC | PLUGIN_HIDE | PLUGIN_DBG | PLUGIN_MOD, // plugin flags
+	/*PLUGIN_HIDE |*/ PLUGIN_DBG | PLUGIN_MOD, // plugin flags
 	init, // initialize
 
 	term, // terminate. this pointer may be NULL.
@@ -111,5 +150,5 @@ plugin_t PLUGIN =
 
 	NAME " debugger plugin", // the preferred short name of the plugin
 
-	"" // the preferred hotkey to run the plugin
+	"W" // the preferred hotkey to run the plugin
 };

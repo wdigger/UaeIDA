@@ -829,6 +829,9 @@
     <ClCompile Include="..\..\uaeida\ida_plugin.cpp">
       <Filter>uaeida</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\uaeida\ida_fd.cpp">
+      <Filter>uaeida</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\resources\35floppy.ico">
@@ -949,6 +952,9 @@
       <Filter>uaeida</Filter>
     </ClInclude>
     <ClInclude Include="..\..\uaeida\ida_plugin.h">
+      <Filter>uaeida</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\uaeida\ida_fd.h">
       <Filter>uaeida</Filter>
     </ClInclude>
   </ItemGroup>

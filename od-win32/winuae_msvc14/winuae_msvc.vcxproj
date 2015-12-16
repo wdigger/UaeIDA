@@ -659,6 +659,7 @@
     <ClCompile Include="..\..\moduleripper.cpp" />
     <ClCompile Include="..\..\uaeida\ida_debug.cpp" />
     <ClCompile Include="..\..\uaeida\ida_plugin.cpp" />
+    <ClCompile Include="..\..\uaeida\ida_fd.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\resources\35floppy.ico" />
@@ -739,6 +740,7 @@
     </Library>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\uaeida\ida_fd.h" />
     <ClInclude Include="..\resources\resource.h" />
     <ClInclude Include="..\..\uaeida\ida_debmod.h" />
     <ClInclude Include="..\..\uaeida\ida_plugin.h" />
