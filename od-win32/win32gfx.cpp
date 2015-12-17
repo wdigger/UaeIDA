@@ -137,6 +137,7 @@ volatile bool vblank_found_rtg;
 static HANDLE flipevent, flipevent2, vblankwaitevent;
 static volatile int flipevent_mode;
 static CRITICAL_SECTION screen_cs;
+static bool screen_cs_allocated;
 
 void gfx_lock (void)
 {
@@ -1092,14 +1093,16 @@ bool render_screen (bool immediate)
 	int cnt;
 
 	render_ok = false;
-	if (minimized || picasso_on || monitor_off || dx_islost ())
+	if (minimized || picasso_on || monitor_off || dx_islost ()) {
 		return render_ok;
+	}
 	cnt = 0;
 	while (wait_render) {
 		sleep_millis (1);
 		cnt++;
-		if (cnt > 500)
+		if (cnt > 500) {
 			return render_ok;
+		}
 	}
 	flushymin = 0;
 	flushymax = currentmode->amiga_height;
@@ -2732,7 +2735,10 @@ int graphics_init (bool mousecapture)
 
 int graphics_setup (void)
 {
-	InitializeCriticalSection (&screen_cs);
+	if (!screen_cs_allocated) {
+		InitializeCriticalSection(&screen_cs);
+		screen_cs_allocated = true;
+	}
 #ifdef PICASSO96
 	InitPicasso96 ();
 #endif
