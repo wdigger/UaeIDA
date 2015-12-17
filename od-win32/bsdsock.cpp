@@ -206,7 +206,12 @@ int init_socket_layer (void)
 				wc.cbClsExtra = 0;
 				wc.cbWndExtra = 0;
 				wc.hInstance = hInst;
-				wc.hIcon = LoadIcon (GetModuleHandle (NULL), MAKEINTRESOURCE (IDI_APPICON));
+#ifdef C_IDA_DEBUG
+				extern HINSTANCE GetHInstance();
+				wc.hIcon = LoadIcon (GetHInstance(), MAKEINTRESOURCE (IDI_APPICON));
+#else
+				wc.hIcon = LoadIcon(GetModuleHandle (NULL), MAKEINTRESOURCE(IDI_APPICON));
+#endif
 				wc.hCursor = LoadCursor (NULL, IDC_ARROW);
 				wc.hbrBackground = (HBRUSH)GetStockObject (BLACK_BRUSH);
 				wc.lpszMenuName = 0;

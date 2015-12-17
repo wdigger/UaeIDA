@@ -18391,7 +18391,12 @@ static INT_PTR CALLBACK DialogProc (HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
 	case WM_INITDIALOG:
 		guiDlg = hDlg;
 		scaleresource_setfont (hDlg);
+#ifdef C_IDA_DEBUG
+		extern HINSTANCE GetHInstance();
+		SendMessage (hDlg, WM_SETICON, ICON_SMALL, (LPARAM)LoadIcon (GetHInstance(), MAKEINTRESOURCE(IDI_APPICON)));
+#else
 		SendMessage (hDlg, WM_SETICON, ICON_SMALL, (LPARAM)LoadIcon (GetModuleHandle (NULL), MAKEINTRESOURCE(IDI_APPICON)));
+#endif
 		if (full_property_sheet) {
 			TCHAR tmp[100];
 			WIN32GUI_LoadUIString (IDS_STARTEMULATION, tmp, sizeof (tmp) / sizeof (TCHAR));

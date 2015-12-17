@@ -29,7 +29,7 @@
 #define FILESYS /* filesys emulation */
 #define UAE_FILESYS_THREADS
 #define AUTOCONFIG /* autoconfig support, fast ram, harddrives etc.. */
-#define JIT /* JIT compiler support */
+//#define JIT /* JIT compiler support */
 #define USE_JIT_FPU
 #define NATMEM_OFFSET natmem_offset
 #define USE_NORMAL_CALLING_CONVENTION 0

@@ -1751,7 +1751,12 @@ static INT_PTR CALLBACK DebuggerProc (HWND hDlg, UINT message, WPARAM wParam, LP
 				if (MonitorFromRect (&rc, MONITOR_DEFAULTTONULL) != NULL)
 					SetWindowPos(hDlg, 0, x, y, w, h, SWP_NOOWNERZORDER | SWP_NOREDRAW | SWP_NOACTIVATE | SWP_DEFERERASE);
 			}
+#ifdef C_IDA_DEBUG
+			extern HINSTANCE GetHInstance();
+			SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)LoadIcon(GetHInstance(), MAKEINTRESOURCE(IDI_APPICON)));
+#else
 			SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)LoadIcon (GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_APPICON)));
+#endif
 			EnumChildWindows(hDlg, InitChildWindows, 0);
 			currpage = -1;
 			firsthist = lasthist = currhist = NULL;

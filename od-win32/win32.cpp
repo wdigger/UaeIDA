@@ -2411,7 +2411,12 @@ static int WIN32_RegisterClasses (void)
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInst;
+#ifdef C_IDA_DEBUG
+	extern HINSTANCE GetHInstance();
+	wc.hIcon = LoadIcon (GetHInstance(), MAKEINTRESOURCE (IDI_APPICON));
+#else
 	wc.hIcon = LoadIcon (GetModuleHandle (NULL), MAKEINTRESOURCE (IDI_APPICON));
+#endif
 	wc.hCursor = LoadCursor (NULL, IDC_ARROW);
 	wc.lpszMenuName = 0;
 	wc.lpszClassName = _T("AmigaPowah");
@@ -2424,7 +2429,12 @@ static int WIN32_RegisterClasses (void)
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInst;
+#ifdef C_IDA_DEBUG
+	extern HINSTANCE GetHInstance();
+	wc.hIcon = LoadIcon (GetHInstance(), MAKEINTRESOURCE (IDI_APPICON));
+#else
 	wc.hIcon = LoadIcon (GetModuleHandle (NULL), MAKEINTRESOURCE (IDI_APPICON));
+#endif
 	wc.hCursor = LoadCursor (NULL, IDC_ARROW);
 	wc.hbrBackground = CreateSolidBrush (black);
 	wc.lpszMenuName = 0;
@@ -2437,7 +2447,12 @@ static int WIN32_RegisterClasses (void)
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInst;
+#ifdef C_IDA_DEBUG
+	extern HINSTANCE GetHInstance();
+	wc.hIcon = LoadIcon (GetHInstance(), MAKEINTRESOURCE (IDI_APPICON));
+#else
 	wc.hIcon = LoadIcon (GetModuleHandle (NULL), MAKEINTRESOURCE (IDI_APPICON));
+#endif
 	wc.hCursor = NULL;
 	wc.hbrBackground = CreateSolidBrush (g_dwBackgroundColor);
 	wc.lpszMenuName = 0;
@@ -2450,7 +2465,12 @@ static int WIN32_RegisterClasses (void)
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInst;
+#ifdef C_IDA_DEBUG
+	extern HINSTANCE GetHInstance();
+	wc.hIcon = LoadIcon (GetHInstance(), MAKEINTRESOURCE (IDI_APPICON));
+#else
 	wc.hIcon = LoadIcon (GetModuleHandle (NULL), MAKEINTRESOURCE (IDI_APPICON));
+#endif
 	wc.hCursor = NULL;
 	wc.hbrBackground = CreateSolidBrush (g_dwBackgroundColor);
 	wc.lpszMenuName = 0;
@@ -2651,6 +2671,10 @@ HMODULE language_load (WORD language)
 			result = NULL;
 		}
 	}
+#endif
+#ifdef C_IDA_DEBUG
+	extern HINSTANCE GetHInstance();
+	result = GetHInstance();
 #endif
 	return result;
 }
