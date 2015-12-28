@@ -20,10 +20,11 @@
 #include "newcpu.h"
 #include "debug.h"
 #include "uae.h"
+#include "uaeipc.h"
+#include "win32.h"
 
 int PASCAL wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow);
 
-ea_t program_base = 0;
 eventlist_t g_events;
 qthread_t uae_thread = NULL;
 
@@ -137,6 +138,7 @@ static void process_exit()
 {
 	uae_quit();
 	deactivate_debugger();
+	closeIPC(globalipc);
 }
 
 /// Start an executable to debug.
@@ -170,7 +172,26 @@ static int idaapi start_process(const char *path, const char *args, const char *
 /// This function is called from the main thread.
 static void idaapi rebase_if_required_to(ea_t new_base)
 {
-	rebase_program(new_base - program_base, MSF_FIXONCE);
+	ea_t currentbase = new_base;
+	ea_t imagebase = inf.baseaddr;
+
+	if (imagebase != currentbase)
+	{
+		adiff_t delta = currentbase - imagebase;
+
+		int code = rebase_program(currentbase - imagebase, MSF_FIXONCE);
+		if (code != MOVE_SEGM_OK)
+		{
+			msg("Failed to rebase program, error code %d\n", code);
+			warning("IDA failed to rebase the program.\n"
+				"Most likely it happened because of the debugger\n"
+				"segments created to reflect the real memory state.\n\n"
+				"Please stop the debugger and rebase the program manually.\n"
+				"For that, please select the whole program and\n"
+				"use Edit, Segments, Rebase program with delta 0x%08a",
+				currentbase - imagebase);
+		}
+	}
 }
 
 /// Prepare to pause the process.
@@ -220,9 +241,6 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 		// are there any pending events?
 		if (g_events.retrieve(event))
 		{
-			if (event->eid == PROCESS_START)
-				program_base = event->ea;
-
 			if (event->eid != STEP /*&& event->eid != BREAKPOINT*/ && event->eid != PROCESS_EXIT)
 			{
 				extern bool handled_ida_event;
