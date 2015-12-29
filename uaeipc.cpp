@@ -145,7 +145,10 @@ static void disconnectIPC (void *vipc)
 	}
 }
 
-static void resetIPC (void *vipc)
+#ifndef C_IDA_DEBUG
+static
+#endif
+void resetIPC (void *vipc)
 {
 	struct uaeipc *ipc = (struct uaeipc*)vipc;
 	disconnectIPC (ipc);

@@ -134,11 +134,11 @@ static void process_continue()
 
 }
 
+extern void resetIPC(void *vipc);
 static void process_exit()
 {
 	uae_quit();
 	deactivate_debugger();
-	closeIPC(globalipc);
 }
 
 /// Start an executable to debug.
@@ -206,8 +206,6 @@ static void idaapi rebase_if_required_to(ea_t new_base)
 /// \retval -1  network error
 static int idaapi prepare_to_pause_process(void)
 {
-	extern bool handled_ida_event;
-	handled_ida_event = false;
 	activate_debugger();
 	return 1;
 }
@@ -223,7 +221,6 @@ static int idaapi prepare_to_pause_process(void)
 /// \retval -1  network error
 static int idaapi uae_exit_process(void)
 {
-	process_exit();
 	return 1;
 }
 
@@ -243,8 +240,6 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 		{
 			if (event->eid != STEP /*&& event->eid != BREAKPOINT*/ && event->eid != PROCESS_EXIT)
 			{
-				extern bool handled_ida_event;
-				handled_ida_event = false;
 				activate_debugger();
 			}
 			return g_events.empty() ? GDE_ONE_EVENT : GDE_MANY_EVENTS;
@@ -407,6 +402,14 @@ static int idaapi write_register(thid_t tid, int regidx, const regval_t *value)
 /// \retval   1  new memory layout is returned
 static int idaapi get_memory_info(meminfo_vec_t &areas)
 {
+	static bool first_run = true;
+
+	if (first_run)
+	{
+		first_run = false;
+		return -2;
+	}
+
 	memory_info_t info;
 	info.name = "MEMORY";
 	info.startEA = 0x00000000;
