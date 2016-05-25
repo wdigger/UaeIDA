@@ -49,7 +49,6 @@
 extern eventlist_t g_events;
 char proc_name[2048];
 bool proc_found = false;
-bool handled_ida_event = false;
 #endif
 
 int debugger_active;
@@ -3236,8 +3235,6 @@ static void print_task_info (uaecptr node, bool nonactive)
 		ev.ea = m68k_getpc();
 		ev.handled = true;
 		g_events.enqueue(ev, IN_BACK);
-
-		handled_ida_event = true;
 	}
 #endif
 }
@@ -4709,7 +4706,7 @@ static void debug_1 (void)
 	TCHAR input[MAX_LINEWIDTH];
 
 #ifdef C_IDA_DEBUG
-	if (!handled_ida_event && proc_found)
+	if (proc_found)
 	{
 		debug_event_t ev;
 		ev.pid = 1;
@@ -4719,7 +4716,6 @@ static void debug_1 (void)
 		ev.eid = PROCESS_SUSPEND;
 		g_events.enqueue(ev, IN_BACK);
 	}
-	handled_ida_event = false;
 #endif
 
 	m68k_dumpstate (&nextpc);
@@ -4792,10 +4788,6 @@ void debug_ (void)
 		memcpy (trace_insn_copy, regs.pc_p, 10);
 		memcpy (&trace_prev_regs, &regs, sizeof regs);
 	}
-#endif
-
-#ifdef C_IDA_DEBUG
-	handled_ida_event = false;
 #endif
 
 	if (!memwatch_triggered) {
@@ -4876,23 +4868,6 @@ void debug_ (void)
 				debug_continue();
 				return;
 			}
-
-#ifdef C_IDA_DEBUG
-			if (!handled_ida_event && proc_found)
-			{
-				debug_event_t ev;
-				ev.pid = 1;
-				ev.tid = 1;
-				ev.ea = pc;
-				ev.bpt.hea = pc;
-				ev.bpt.kea = BADADDR;
-				ev.handled = true;
-				ev.eid = BREAKPOINT;
-				g_events.enqueue(ev, IN_BACK);
-
-				handled_ida_event = true;
-			}
-#endif
 		}
 	} else {
 		console_out_f (_T("Memwatch %d: break at %08X.%c %c%c%c %08X PC=%08X "), memwatch_triggered - 1, mwhit.addr,
@@ -4912,8 +4887,8 @@ void debug_ (void)
 			return;
 		}
 
-#ifdef C_IDA_DEBUG
-		if (!handled_ida_event && proc_found)
+#ifndef C_IDA_DEBUG
+		if (proc_found)
 		{
 			debug_event_t ev;
 			ev.pid = 1;
@@ -4922,8 +4897,6 @@ void debug_ (void)
 			ev.handled = true;
 			ev.eid = STEP;
 			g_events.enqueue(ev, IN_BACK);
-
-			handled_ida_event = true;
 		}
 #endif
 	}
