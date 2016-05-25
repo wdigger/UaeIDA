@@ -139,6 +139,21 @@ static void process_exit()
 {
 	uae_quit();
 	deactivate_debugger();
+
+    extern BOOL useinternalcmd;
+    extern TCHAR internalcmd[MAX_LINEWIDTH + 1];
+    extern int inputfinished;
+
+    _tcscpy(internalcmd, _T("q"));
+    useinternalcmd = TRUE;
+    inputfinished = 1;
+
+    if (uae_thread != NULL)
+    {
+        qthread_free(uae_thread);
+        qthread_kill(uae_thread);
+        uae_thread = NULL;
+    }
 }
 
 /// Start an executable to debug.
@@ -173,7 +188,7 @@ static int idaapi start_process(const char *path, const char *args, const char *
 static void idaapi rebase_if_required_to(ea_t new_base)
 {
 	ea_t currentbase = new_base;
-	ea_t imagebase = inf.baseaddr;
+	ea_t imagebase = inf.startIP;
 
 	if (imagebase != currentbase)
 	{
@@ -221,6 +236,8 @@ static int idaapi prepare_to_pause_process(void)
 /// \retval -1  network error
 static int idaapi uae_exit_process(void)
 {
+    process_exit();
+
 	return 1;
 }
 
@@ -259,6 +276,10 @@ static int idaapi continue_after_event(const debug_event_t *event)
 {
 	switch (event->eid)
 	{
+    case PROCESS_START:
+    {
+        activate_debugger();
+    } break;
 	case BREAKPOINT:
 	case STEP:
 	case PROCESS_SUSPEND:
@@ -324,12 +345,11 @@ static int idaapi uae_set_resume_mode(thid_t tid, resume_mode_t resmod)
 	switch (resmod)
 	{
 	case RESMOD_INTO:
-		_tcscpy(internalcmd, _T("t"));
-		useinternalcmd = TRUE;
-		inputfinished = 1;
-		break;
-	case RESMOD_OVER:
-		_tcscpy(internalcmd, _T("z"));
+    case RESMOD_OVER:
+        if (is_call_insn(m68k_getpc()) && resmod == RESMOD_OVER)
+		    _tcscpy(internalcmd, _T("z"));
+        else
+            _tcscpy(internalcmd, _T("t"));
 		useinternalcmd = TRUE;
 		inputfinished = 1;
 		break;
