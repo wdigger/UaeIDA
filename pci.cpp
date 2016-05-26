@@ -51,7 +51,10 @@ static void pci_board_free(struct pci_board_state *pcibs)
 	if (!pcibs || !pcibs->board)
 		return;
 	if (pcibs->board->free)
-		pcibs->board->free(pcibs);
+	{
+		pci_dev_free pcibs_board_free = pcibs->board->free;
+		pcibs_board_free(pcibs);
+	}
 }
 
 static struct pci_bridge *pci_bridge_alloc(void)
