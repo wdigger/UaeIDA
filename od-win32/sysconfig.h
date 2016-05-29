@@ -80,7 +80,7 @@
 #define PROWIZARD /* Pro-Wizard module ripper */
 #define ARCADIA /* Arcadia arcade system */
 #define ARCHIVEACCESS /* ArchiveAccess decompression library */
-#define LOGITECHLCD /* Logitech G15 LCD */
+//#define LOGITECHLCD /* Logitech G15 LCD */
 #define SAVESTATE /* State file support */
 #define A2091 /* A590/A2091 SCSI */
 #define A2065 /* A2065 Ethernet card */

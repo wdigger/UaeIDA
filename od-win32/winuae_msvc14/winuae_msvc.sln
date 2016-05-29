@@ -3,6 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "winuae", "winuae_msvc.vcxproj", "{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521} = {DEF7ACF7-050E-4069-BB99-5B5D93F60521}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gencpu", "..\gencpu_msvc\gencpu_msvc.vcxproj", "{DEF7ACF7-050E-4069-BB99-5B5D93F60521}"
 EndProject
