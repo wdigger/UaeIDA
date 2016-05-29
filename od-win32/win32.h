@@ -20,12 +20,12 @@
 #define LANG_DLL_FULL_VERSION_MATCH 1
 
 #if WINUAEPUBLICBETA
-#define WINUAEBETA _T("15")
+#define WINUAEBETA _T("16")
 #else
 #define WINUAEBETA _T("")
 #endif
 
-#define WINUAEDATE MAKEBD(2016, 5, 24)
+#define WINUAEDATE MAKEBD(2016, 5, 28)
 
 //#define WINUAEEXTRA _T("AmiKit Preview")
 //#define WINUAEEXTRA _T("Amiga Forever Edition")
@@ -49,6 +49,7 @@ extern int minimized;
 extern int monitor_off;
 extern void *globalipc, *serialipc;
 
+extern TCHAR executable_path[MAX_DPATH];
 extern TCHAR start_path_exe[MAX_DPATH];
 extern TCHAR start_path_data[MAX_DPATH];
 extern TCHAR start_path_plugins[MAX_DPATH];
