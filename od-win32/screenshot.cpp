@@ -18,11 +18,15 @@
 #include "registry.h"
 #include "gfxfilter.h"
 #include "xwin.h"
+#include "drawing.h"
+#include "fsdb.h"
 
 #include "png.h"
 
 int screenshotmode = PNG_SCREENSHOTS;
 int screenshot_originalsize = 0;
+int screenshot_clipmode = 0;
+int screenshot_multi = 0;
 
 static void namesplit (TCHAR *s)
 {
@@ -73,6 +77,7 @@ static BITMAPINFO *bi; // bitmap info
 static LPVOID lpvBits = NULL; // pointer to bitmap bits array
 static HBITMAP offscreen_bitmap;
 static int screenshot_prepared;
+static int screenshot_multi_start;
 
 void screenshot_free (void)
 {
@@ -101,19 +106,22 @@ static int screenshot_prepare (int imagemode, struct vidbuffer *vb)
 
 	screenshot_free ();
 
-	regqueryint (NULL, _T("Screenshot_Original"), &screenshot_originalsize);
+	regqueryint(NULL, _T("Screenshot_Original"), &screenshot_originalsize);
+	regqueryint(NULL, _T("Screenshot_ClipMode"), &screenshot_clipmode);
 	if (imagemode < 0)
 		imagemode = screenshot_originalsize;
 
 	if (imagemode) {
-		int spitch, dpitch, x, y;
+		int spitch, dpitch;
 		uae_u8 *src, *dst, *mem;
 		bool needfree = false;
 		uae_u8 *palette = NULL;
 		int rgb_bb2, rgb_gb2, rgb_rb2;
 		int rgb_bs2, rgb_gs2, rgb_rs2;
 		uae_u8 pal[256 * 3];
-		
+		int screenshot_width = 0, screenshot_height = 0;
+		int screenshot_xoffset = -1, screenshot_yoffset = -1;
+
 		if (WIN32GFX_IsPicassoScreen ()) {
 			src = mem = getrtgbuffer (&width, &height, &spitch, &bits, pal);
 			needfree = true;
@@ -156,10 +164,78 @@ static int screenshot_prepare (int imagemode, struct vidbuffer *vb)
 			}
 			goto donormal;
 		}
+
+		int screenshot_xmult = currprefs.screenshot_xmult + 1;
+		int screenshot_ymult = currprefs.screenshot_ymult + 1;
+
+		screenshot_width = width;
+		screenshot_height = height;
+		if (currprefs.screenshot_width > 0)
+			screenshot_width = currprefs.screenshot_width;
+		if (currprefs.screenshot_height > 0)
+			screenshot_height = currprefs.screenshot_height;
+		screenshot_xoffset = currprefs.screenshot_xoffset;
+		screenshot_yoffset = currprefs.screenshot_yoffset;
+
+		if (!WIN32GFX_IsPicassoScreen() && screenshot_clipmode == 1) {
+			int cw, ch, cx, cy, crealh = 0;
+			if (get_custom_limits(&cw, &ch, &cx, &cy, &crealh)) {
+				int maxw = currprefs.screenshot_max_width << currprefs.gfx_resolution;
+				int maxh = currprefs.screenshot_max_height << currprefs.gfx_vresolution;
+				int minw = currprefs.screenshot_min_width << currprefs.gfx_resolution;
+				int minh = currprefs.screenshot_min_height << currprefs.gfx_vresolution;
+				if (minw > AMIGA_WIDTH_MAX << currprefs.gfx_resolution)
+					minw = AMIGA_WIDTH_MAX << currprefs.gfx_resolution;
+				if (minh > AMIGA_HEIGHT_MAX << currprefs.gfx_resolution)
+					minh = AMIGA_HEIGHT_MAX << currprefs.gfx_resolution;
+				if (maxw < minw)
+					maxw = minw;
+				if (maxh < minh)
+					maxh = minh;
+				screenshot_width = cw;
+				screenshot_height = ch;
+				screenshot_xoffset = cx;
+				screenshot_yoffset = cy;
+				if (screenshot_width < minw && minw > 0) {
+					screenshot_xoffset -= (minw - screenshot_width) / 2;
+					screenshot_width = minw;
+				}
+				if (screenshot_height < minh && minh > 0) {
+					screenshot_yoffset -= (minh - screenshot_height) / 2;
+					screenshot_height = minh;
+				}
+				if (screenshot_width > maxw && maxw > 0) {
+					screenshot_xoffset += (screenshot_width - maxw) / 2;
+					screenshot_width = maxw;
+				}
+				if (screenshot_height > maxh && maxh > 0) {
+					screenshot_yoffset += (screenshot_height - maxh) / 2;
+					screenshot_height = maxh;
+				}
+			}
+		}
+
+		if (screenshot_xmult < 1)
+			screenshot_xmult = 1;
+		if (screenshot_ymult < 1)
+			screenshot_ymult = 1;
+
+		int maxw_output = currprefs.screenshot_output_width;
+		int maxh_output = currprefs.screenshot_output_height;
+		while (maxw_output > screenshot_width * screenshot_xmult && screenshot_xmult < 8) {
+			screenshot_xmult++;
+		}
+		while (maxh_output > screenshot_height * screenshot_ymult && screenshot_ymult < 8) {
+			screenshot_ymult++;
+		}
+
+		int xoffset = screenshot_xoffset < 0 ? (screenshot_width - width) / 2 : -screenshot_xoffset;
+		int yoffset = screenshot_yoffset < 0 ? (screenshot_height - height) / 2 : -screenshot_yoffset;
+
 		ZeroMemory (bi, sizeof(bi));
 		bi->bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
-		bi->bmiHeader.biWidth = width;
-		bi->bmiHeader.biHeight = height;
+		bi->bmiHeader.biWidth = screenshot_width * screenshot_xmult;
+		bi->bmiHeader.biHeight = screenshot_height * screenshot_ymult;
 		bi->bmiHeader.biPlanes = 1;
 		bi->bmiHeader.biBitCount = bits <= 8 ? 8 : 24;
 		bi->bmiHeader.biCompression = BI_RGB;
@@ -185,50 +261,101 @@ static int screenshot_prepare (int imagemode, struct vidbuffer *vb)
 			}
 			goto oops;
 		}
-		dst = (uae_u8*)lpvBits + (height - 1) * dpitch;
-		if (bits <=8) {
-			for (y = 0; y < height; y++) {
-				memcpy (dst, src, width);
-				src += spitch;
-				dst -= dpitch;
+
+		int dpitch2 = dpitch;
+		dpitch *= screenshot_ymult;
+
+		dst = (uae_u8*)lpvBits;
+		dst += dpitch * screenshot_height;
+		if (yoffset > 0) {
+			if (yoffset >= screenshot_height - height)
+				yoffset = screenshot_height - height;
+			dst -= dpitch * yoffset;
+		} else if (yoffset < 0) {
+			yoffset = -yoffset;
+			if (yoffset >= height - screenshot_height)
+				yoffset = height - screenshot_height;
+			src += spitch * yoffset;
+		}
+
+		int xoffset2 = 0;
+		if (xoffset < 0) {
+			xoffset2 = -xoffset;
+			xoffset = 0;
+		}
+		int dbpx = bits / 8;
+		int sbpx = bits / 8;
+		if (sbpx == 3)
+			sbpx = 4;
+
+		int xmult = screenshot_xmult;
+		int ymult = screenshot_ymult;
+
+		for (int y = 0; y < screenshot_height && y < height; y++) {
+			uae_u8 *s, *d;
+			dst -= dpitch;
+			d = dst;
+			s = src;
+			if (xoffset > 0) {
+				d += xoffset * dbpx;
+			} else if (xoffset2 > 0) {
+				s += xoffset2 * sbpx;
 			}
-		} else {
-			for (y = 0; y < height; y++) {
-				for (x = 0; x < width; x++) {
+			for (int x = 0; x < screenshot_width && x < width; x++) {
+				int xx = x * screenshot_xmult;
+				if (bits <= 8) {
+					uae_u8 *d2 = d;
+					for (int y2 = 0; y2 < ymult; y2++) {
+						for (int x2 = 0; x2 < xmult; x2++) {
+							d[xx + x2] = s[x];
+						}
+						d2 += dpitch2;
+					}
+				} else {
 					int shift;
 					uae_u32 v = 0;
-					uae_u32 v2;
+					uae_u32 v2, v2a, v2b, v2c;
 
 					if (bits == 16)
-						v = ((uae_u16*)src)[x];
+						v = ((uae_u16*)s)[x];
 					else if (bits == 32)
-						v = ((uae_u32*)src)[x];
+						v = ((uae_u32*)s)[x];
 
 					shift = 8 - rgb_bb2;
 					v2 = (v >> rgb_bs2) & ((1 << rgb_bb2) - 1);
 					v2 <<= shift;
 					if (rgb_bb2 < 8)
 						v2 |= (v2 >> shift) & ((1 < shift) - 1);
-					dst[x * 3 + 0] = v2;
+					v2a = v2;
 
 					shift = 8 - rgb_gb2;
 					v2 = (v >> rgb_gs2) & ((1 << rgb_gb2) - 1);
 					v2 <<= (8 - rgb_gb2);
 					if (rgb_gb < 8)
 						v2 |= (v2 >> shift) & ((1 < shift) - 1);
-					dst[x * 3 + 1] = v2;
+					v2b = v2;
 
 					shift = 8 - rgb_rb2;
 					v2 = (v >> rgb_rs2) & ((1 << rgb_rb2) - 1);
 					v2 <<= (8 - rgb_rb2);
 					if (rgb_rb < 8)
 						v2 |= (v2 >> shift) & ((1 < shift) - 1);
-					dst[x * 3 + 2] = v2;
+					v2c = v2;
 
+					uae_u8 *d2 = d;
+					for (int y2 = 0; y2 < ymult; y2++) {
+						for (int x2 = 0; x2 < xmult; x2++) {
+							d2[(xx + x2) * 3 + 0] = v2a;
+							d2[(xx + x2) * 3 + 1] = v2b;
+							d2[(xx + x2) * 3 + 2] = v2c;
+						}
+						d2 += dpitch2;
+					}
 				}
-				src += spitch;
-				dst -= dpitch;
 			}
+
+
+			src += spitch;
 		}
 		if (needfree) {
 			if (WIN32GFX_IsPicassoScreen())
@@ -242,51 +369,119 @@ donormal:
 		width = WIN32GFX_GetWidth ();
 		height = WIN32GFX_GetHeight ();
 
-		surface_dc = gethdc ();
-		if (surface_dc == NULL)
+		if (D3D_isenabled()) {
+			int w, h, bits;
+			HRESULT hr;
+			D3DLOCKED_RECT l;
+			LPDIRECT3DSURFACE9 s = D3D_capture(&w, &h, &bits);
+			if (s) {
+				hr = s->LockRect(&l, NULL, D3DLOCK_READONLY);
+				if (SUCCEEDED(hr)) {
+					int dpitch = (((w * 24 + 31) & ~31) / 8);
+					lpvBits = xmalloc(uae_u8, dpitch * h); 
+
+					ZeroMemory(bi, sizeof(bi));
+					bi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+					bi->bmiHeader.biWidth = w;
+					bi->bmiHeader.biHeight = h;
+					bi->bmiHeader.biPlanes = 1;
+					bi->bmiHeader.biBitCount = 24;
+					bi->bmiHeader.biCompression = BI_RGB;
+					bi->bmiHeader.biSizeImage = dpitch * bi->bmiHeader.biHeight;
+					bi->bmiHeader.biXPelsPerMeter = 0;
+					bi->bmiHeader.biYPelsPerMeter = 0;
+					bi->bmiHeader.biClrUsed = 0;
+					bi->bmiHeader.biClrImportant = 0;
+
+					if (lpvBits) {
+						if (bits == 32) {
+							for (int y = 0; y < h; y++) {
+								uae_u8 *d = (uae_u8*)lpvBits + (h - y - 1) * dpitch;
+								uae_u32 *s = (uae_u32*)((uae_u8*)l.pBits + y * l.Pitch);
+								for (int x = 0; x < w; x++) {
+									uae_u32 v = *s++;
+									d[0] = v >> 0;
+									d[1] = v >> 8;
+									d[2] = v >> 16;
+									d += 3;
+								}
+							}
+						} else if (bits == 16 || bits == 15) {
+							for (int y = 0; y < h; y++) {
+								uae_u8 *d = (uae_u8*)lpvBits + (h - y - 1) * dpitch;
+								uae_u16 *s = (uae_u16*)((uae_u8*)l.pBits + y * l.Pitch);
+								for (int x = 0; x < w; x++) {
+									uae_u16 v = s[x];
+									uae_u16 v2 = v;
+									if (bits == 16) {
+										v2 = v & 31;
+										v2 |= ((v & (31 << 5)) << 1) | (((v >> 5) & 1) << 5);
+										v2 |= (v & (31 << 10)) << 1;
+									} else {
+										v2 = v & 31;
+										v2 |= (v >> 1) & (31 << 5);
+										v2 |= (v >> 1) & (31 << 10);
+									}
+									((uae_u16*)d)[0] = v2;
+									d += 2;
+								}
+							}
+						}
+					}
+					s->UnlockRect();
+				}
+			}
+
+		} else {
+			surface_dc = gethdc ();
+			if (surface_dc == NULL)
+				goto oops;
+
+			// need a HBITMAP to convert it to a DIB
+			if ((offscreen_bitmap = CreateCompatibleBitmap (surface_dc, width, height)) == NULL)
+				goto oops; // error
+
+			// The bitmap is empty, so let's copy the contents of the surface to it.
+			// For that we need to select it into a device context.
+			if ((offscreen_dc = CreateCompatibleDC (surface_dc)) == NULL)
+				goto oops; // error
+
+			// select offscreen_bitmap into offscreen_dc
+			hgdiobj = SelectObject (offscreen_dc, offscreen_bitmap);
+
+			// now we can copy the contents of the surface to the offscreen bitmap
+			BitBlt (offscreen_dc, 0, 0, width, height, surface_dc, 0, 0, SRCCOPY);
+
+			// de-select offscreen_bitmap
+			SelectObject (offscreen_dc, hgdiobj);
+
+			ZeroMemory (bi, sizeof(bi));
+			bi->bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
+			bi->bmiHeader.biWidth = width;
+			bi->bmiHeader.biHeight = height;
+			bi->bmiHeader.biPlanes = 1;
+			bi->bmiHeader.biBitCount = 24;
+			bi->bmiHeader.biCompression = BI_RGB;
+			bi->bmiHeader.biSizeImage = (((bi->bmiHeader.biWidth * bi->bmiHeader.biBitCount + 31) & ~31) / 8) * bi->bmiHeader.biHeight;
+			bi->bmiHeader.biXPelsPerMeter = 0;
+			bi->bmiHeader.biYPelsPerMeter = 0;
+			bi->bmiHeader.biClrUsed = 0;
+			bi->bmiHeader.biClrImportant = 0;
+
+			// Reserve memory for bitmap bits
+			if (!(lpvBits = xmalloc (uae_u8, bi->bmiHeader.biSizeImage)))
+				goto oops; // out of memory
+
+			// Have GetDIBits convert offscreen_bitmap to a DIB (device-independent bitmap):
+			if (!GetDIBits (offscreen_dc, offscreen_bitmap, 0, bi->bmiHeader.biHeight, lpvBits, bi, DIB_RGB_COLORS))
+				goto oops; // GetDIBits FAILED
+
+			releasehdc (surface_dc);
+			surface_dc = NULL;
+		}
+
+		if (!lpvBits)
 			goto oops;
-
-		// need a HBITMAP to convert it to a DIB
-		if ((offscreen_bitmap = CreateCompatibleBitmap (surface_dc, width, height)) == NULL)
-			goto oops; // error
-
-		// The bitmap is empty, so let's copy the contents of the surface to it.
-		// For that we need to select it into a device context.
-		if ((offscreen_dc = CreateCompatibleDC (surface_dc)) == NULL)
-			goto oops; // error
-
-		// select offscreen_bitmap into offscreen_dc
-		hgdiobj = SelectObject (offscreen_dc, offscreen_bitmap);
-
-		// now we can copy the contents of the surface to the offscreen bitmap
-		BitBlt (offscreen_dc, 0, 0, width, height, surface_dc, 0, 0, SRCCOPY);
-
-		// de-select offscreen_bitmap
-		SelectObject (offscreen_dc, hgdiobj);
-
-		ZeroMemory (bi, sizeof(bi));
-		bi->bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
-		bi->bmiHeader.biWidth = width;
-		bi->bmiHeader.biHeight = height;
-		bi->bmiHeader.biPlanes = 1;
-		bi->bmiHeader.biBitCount = 24;
-		bi->bmiHeader.biCompression = BI_RGB;
-		bi->bmiHeader.biSizeImage = (((bi->bmiHeader.biWidth * bi->bmiHeader.biBitCount + 31) & ~31) / 8) * bi->bmiHeader.biHeight;
-		bi->bmiHeader.biXPelsPerMeter = 0;
-		bi->bmiHeader.biYPelsPerMeter = 0;
-		bi->bmiHeader.biClrUsed = 0;
-		bi->bmiHeader.biClrImportant = 0;
-
-		// Reserve memory for bitmap bits
-		if (!(lpvBits = xmalloc (uae_u8, bi->bmiHeader.biSizeImage)))
-			goto oops; // out of memory
-
-		// Have GetDIBits convert offscreen_bitmap to a DIB (device-independent bitmap):
-		if (!GetDIBits (offscreen_dc, offscreen_bitmap, 0, bi->bmiHeader.biHeight, lpvBits, bi, DIB_RGB_COLORS))
-			goto oops; // GetDIBits FAILED
-
-		releasehdc (surface_dc);
-		surface_dc = NULL;
 	}
 	screenshot_prepared = TRUE;
 	return 1;
@@ -406,6 +601,14 @@ static int savebmp (FILE *fp)
 	return 0;
 }
 
+static void screenshot_prepare_multi(void)
+{
+	screenshot_multi_start = true;
+}
+
+static int filenumber = 0;
+static int dirnumber = 1;
+
 /*
 Captures the Amiga display (DirectDraw, D3D or OpenGL) surface and saves it to file as a 24bit bitmap.
 */
@@ -414,6 +617,8 @@ int screenshotf (const TCHAR *spath, int mode, int doprepare, int imagemode, str
 	static int recursive;
 	FILE *fp = NULL;
 	int failed = 0;
+	int screenshot_max = 1000; // limit 999 iterations / screenshots
+	TCHAR *format = _T("%s%s%s%03d.%s");
 
 	HBITMAP offscreen_bitmap = NULL; // bitmap that is converted to a DIB
 	HDC offscreen_dc = NULL; // offscreen DC that we can select offscreen bitmap into
@@ -438,7 +643,6 @@ int screenshotf (const TCHAR *spath, int mode, int doprepare, int imagemode, str
 		TCHAR path[MAX_DPATH];
 		TCHAR name[MAX_DPATH];
 		TCHAR underline[] = _T("_");
-		int number = 0;
 
 		if (spath) {
 			fp = _tfopen (spath, _T("wb"));
@@ -456,6 +660,28 @@ int screenshotf (const TCHAR *spath, int mode, int doprepare, int imagemode, str
 		}
 		fetch_path (_T("ScreenshotPath"), path, sizeof (path) / sizeof (TCHAR));
 		CreateDirectory (path, NULL);
+		if (screenshot_multi) {
+			TCHAR *p = path + _tcslen(path);
+			while(dirnumber < 1000) {
+				_stprintf(p, _T("%03d\\"), dirnumber);
+				if (!screenshot_multi_start)
+					break;
+				filenumber = 0;
+				if (!my_existsdir(path) && !my_existsfile(path))
+					break;
+				dirnumber++;
+			}
+			format = _T("%s%s%s%05d.%s");
+			screenshot_max = 100000;
+			screenshot_multi_start = 0;
+			if (dirnumber == 1000) {
+				failed = 1;
+				goto oops;
+			}
+			CreateDirectory(path, NULL);
+		}
+
+
 		name[0] = 0;
 		if (currprefs.floppyslots[0].dfxtype >= 0)
 			_tcscpy (name, currprefs.floppyslots[0].df);
@@ -465,9 +691,9 @@ int screenshotf (const TCHAR *spath, int mode, int doprepare, int imagemode, str
 			underline[0] = 0;
 		namesplit (name);
 
-		while(++number < 1000) // limit 999 iterations / screenshots
+		while(++filenumber < screenshot_max)
 		{
-			_stprintf (filename, _T("%s%s%s%03d.%s"), path, name, underline, number, screenshotmode ? _T("png") : _T("bmp"));
+			_stprintf (filename, format, path, name, underline, filenumber, screenshotmode ? _T("png") : _T("bmp"));
 			if ((fp = _tfopen (filename, _T("rb"))) == NULL) // does file not exist?
 			{
 				int nok = 0;
@@ -508,6 +734,9 @@ oops:
 
 	recursive--;
 
+	if (failed)
+		screenshot_multi = 0;
+
 	return failed == 0;
 }
 
@@ -515,9 +744,20 @@ oops:
 
 void screenshot (int mode, int doprepare)
 {
-#if 1
-	screenshotf (NULL, mode, doprepare, -1, NULL);
-#else
+	if (mode == 2) {
+		screenshot_multi = 10;
+		screenshot_prepare_multi();
+	} else if (mode == 3) {
+		screenshot_multi = -1;
+		screenshot_prepare_multi();
+	} else if (mode == 4) {
+		screenshot_multi = 0;
+		filenumber = 0;
+	} else {
+		screenshotf(NULL, mode, doprepare, -1, NULL);
+	}
+
+#if 0
 	struct vidbuffer vb;
 	int w = gfxvidinfo.drawbuffer.inwidth;
 	int h = gfxvidinfo.drawbuffer.inheight;

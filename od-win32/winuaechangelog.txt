@@ -1,4 +1,383 @@
 
+Beta 15:
+
+- Remove unmatched characters from keyboard injected paste event. (Previously was replaced with spaces).
+- Delay each paste injected key press and release a bit. Some programs don't like too fast key events.
+- Restoring statefile with blitter active and it was force-finished (=not cycle-exact mode): blitter
+  interrupt was not correctly generated when restoring state file.
+- Fixed Direct3D mode DirectX9 install warning buffer overflow.
+- Added "ROM disabled" to ROM panel Boot ROM selection. "ROM disabled" = force disable UAE boot ROM even
+  if one or more UAE expansions are configured.
+
+Beta 14:
+
+- AGA subpixel scrolling: if line's parameters didn't change compared to previous field's line, line was
+  not marked as "changed" and was not alwsays redrawn correctly. (Roketz scoreboard corruption)
+- CD32: always generate subchannel interrupts and transfer subchannel frames when reading CD sectors if
+  subchannel DMA channel is enabled. (Previously was only done when playing CD audio)
+  Real hardware also transfer subchannel frames when CD is idle. This is not yet emulated.
+- Added "Paste" input event (END+INSERT default mapping), injects host clipboard text content using emulated
+  keyboard key codes. Only available when clipboard sharing is not active and only supports ROM default US
+  keyboard layout. For example can be used to paste strings directly to boot CLI, hardware debuggers or
+  non-AmigaOS operating systems.
+- Mouse/joystick autoswitching broke some betas ago.
+- Pause/GUI + black frame insertion: don't show black frame.
+- IVS Trumpcard Pro/GrandSlam SCSI emulation implemented.
+- AROS ROM updated.
+- Few weeks ago released new MSVC optimizer enabled (May not have it enabled in final version because it
+  is not yet fully production ready). Report if you notice any performance improvements.
+
+IVS Trumpcard Pro/GrandSlam SCSI:
+- Autoboot, seems to support custom filesystems.
+- 5380 based.
+- Fake DMA. Long reads, word wide writes.
+- "Trumpcard Professional Driver 4.9 - devs/IVS_SCSIpro.driver IVSSCSI 4.9 (20 Sep 1991)"
+
+Beta 13:
+
+- HALT10 was incorrectly triggered in some configurations (b12)
+- Update ExecBase.MaxLocMem (and ChkSum) if more than 2M chip RAM is configured.
+- It was not possible to fully disable enabled expansion device without restart. Checkbox was unticked but
+  device was not fully disabled.
+- Copper COPJMP blitter conflict bug emulation is again disabled (Breaks Batman Vuelve / Batman Group).
+  There is still something unknown. I did some more tests and some blitter cycle sequences do not conflict
+  with buggy copper cycle and correctly wait one extra cycle.
+- Added IVS Trumpcard Pro/GrandSlam SCSI v4.9 ROM image. Emulation not yet implemented.
+  "Trumpcard Professional Driver 4.9 - devs/IVS_SCSIpro.driver IVSSCSI 4.9 (20 Sep 1991)"
+
+Variable Refresh rate updates. I finally bought G-Sync monitor, Acer Predator X34. Every emulator
+(any emulator!) user should get G-Sync or FreeSync hardware because variable sync has all the advantages of
+vsync without any vsync disadvantages!)
+  
+- Adaptive Sync renamed to Variable Sync. Adaptive Sync is name of DP variable refresh rate standard (which
+  AMD's FreeSync is based on). "Official" generic name is Variable Refresh Rates but Variable Sync fits
+  better with other VSync modes in GUI.
+- Variable sync + black frame insertion is now supported in windowed and full-window mode.
+  (I couldn't get G-Sync to work in normal windowed mode but it did work in full-window)
+- Variable sync + black frame insertion is now supported in RTG modes.
+- Black frame insertion is not enabled in variable sync mode if refresh rate would become larger than
+  selected display refresh rate (fullscreen) or desktop refresh rate (windowed/full-window).
+- Variable sync + black frame insertion and if doubled refresh rate is equal to selected/max hardware
+  supported refresh rate: automatically reduce internal emulated refresh rate by 0.5Hz to guarantee
+  glitch free display. (Workaround for monitors that have max refresh rate of 100Hz=PAL or 120Hz=NTSC)
+
+Continuation to offtopic PC story: returned it on monday, replacement arrived on wednesday.
+
+Beta 12:
+
+- Dummy 68030 MMU instructions were also accidentally disabled in "generic" 680x0 core. (b11)
+- AGA mode HAM6 colors were not 100% accurate. (Was fixed in b11)
+- Stop with HALT10 if compatible CPU is not ticked and exception begins with SSP pointing to non-existing
+  address space.
+- Prevent programmed mode display width and height to become too small. Program doing something very stupid
+  or crashing program can write very random values to programmable refresh rate custom registers.
+- Switching Advanced chipset compatible option off and then back on does not anymore reset chipset extra
+  back to Generic in non-quickstart mode.
+- 1M/512k+512k Advanced chipset option was not reset when Advanced chipset was in compatibility mode.
+- A3000 SCSI + any WD based Z2 SCSI controller: autoconfig didn't work.
+
+Offtopic PC story: yesterday one of my GTX980 (Gigabyte Gaming G1) decided to release some magic smoke mid game,
+I guess something shorted and power supply shut the system down instantly. Today I tested both (SLI setup,
+I wasn't sure which one died, backplate hides most of the PCB), one works, another shows fire
+and smoke signals.. Fortunately everything else appears to be fine.
+
+Beta 11:
+
+- Screenshot/capture without "before filtering" ticked now uses much faster GetRenderTargetData()
+  function in D3D mode to capture the output.
+- Ticked 68060 unimplemented CPU emu checkbox also enabled 68030 MMU instructions.
+- Terminate indirect UAE Boot ROM trap threads before unmapping Amiga side memory to prevent
+  random crashes when exiting emulator with traps active.
+- Debugger il mask is now accepted in two 32-bit parts, 64-bit values are not supported by debugger input.
+- Added gfx_black_frame_insertion_ratio config entry, sets timing between normal and black frames in adaptive
+  sync mode. Default is 50 (50%, normal and black frames have same duration).
+- CD32 emulation updates, mostly previously unknown undocumented features:
+  - It seems unmapped addresses don't "float", all invalid reads seem to always return zeros.
+  - CIA chip select, address bits 12 and 13 are CIA selects. Gary: 0=none,1=A,2=B,3=A+B,
+    Gayle: 0=none,1=A,2=B,3=none, Akiko: 0=A,1=A,2=B,3=B (Very unexpected)
+  - CIA address space: Gary: $A00000-$BFFFFF, Gayle: $BFDxxx and $BFExxx, Akiko: $BFE000-$BFFFFF.
+  - Custom register mirror at $B90000-$B9FFFF! (This is really weird..)
+  - Usual custom register mirror at $C00000-$CFFFFF.
+  - Akiko addresses are mapped from $B80000 to $B87FFF (was $B8FFFF) and has 64 byte mirroring (was no
+    mirroring)
+  - Akiko ID at $B80000.l is $C0CACAFE (was only $CAFE at $B80002.w, KS checks this address for $CAFE)
+  - All write-only registers seem to read same data as nearby read-only register.
+  - Interrupt registers only have bits 24 to 31 writable, other bits always read as zeros.
+  - Config ($B80024) register has bits 23 to 31 writable, other bits always read as zeros.
+  - Subchannel arrived interrupt bit is set at boot for some unknown reason, subchannel index
+    register ($B80018) works strangely and has unexpected value at boot ($C2).
+  - Match Akiko C2P behavior with real hardware when reading bytes/words or when doing multiple read passes.
+  - When booted with CD inserted: first packet from CD MCU is always "media inserted" packet.
+  - $B80028.b reads last received command packet byte.
+  - Writing to $B80028.b sends command bytes to CD MCU. (This is not emulated yet and no program uses it)
+  - Akiko internal CIAs don't have external TOD input pins. CIA-A TOD which normally counts vsyncs or
+    power supply ticks count rate is selected with $B80020 bit 23 (0=50Hz, 1=60Hz). CIA-B (hsync)
+    timing logic is not known yet but it is also internally generated.
+  - Old interrupt request set/clear hacks removed.
+  - All CD status return codes (including errors) include door status (open/closed) in bit 0.
+  - Contents of unused TOC entry bytes now contain real hardware matching values.
+
+Beta 10:
+
+- if uaenet.device is online and packet(s) have arrived but there is no pending CMD_READ/CMD_READORPHANs:
+  wait about 2s before dropping it, it is possible that multiple packets will arrive so quickly that Amiga-side
+  TCP/IP stack don't have time to queue more read commands before packets get dropped.
+- uaenet.device stability fix.
+- Loading config with unplugged joystick or mouse inserted in either port: previous device was not autoselected.
+- Filter panel scaling mode active and mouse driver enabled: mouse got stuck in a corner in some situations.
+- Screenshot input event set to toggle-mode in Input panel: key/button press = create screenshots continuously
+  every frame, following key/button press = stop automatic screenshots.
+- one genlinetoscr function (16-bit 4x horizontal stretch) used genlock function in non-genlock mode.
+- Adaptive Sync "vsync" mode added. Optimal setting designed for G-Sync/FreeSync monitors. Also allows 100/120Hz
+  black frame insertion mode. Not very stable yet. (Don't try to use without adaptive sync hardware..)
+- 68040 MMU mode SR M-bit handling was missing. 68060 SR M-bit handling was not correct.
+- Disable bsdsocket.library if indirect UAE Boot ROM is enabled, it is not (yet?) compatible.
+
+Beta 9:
+
+- Fixed swapped audio channels if stereo separation was set (b1 cleanup missed code path)
+- Fixed uaehf.device SCSI emulation sense data possible crash/wrong status. (trap update related)
+- 32M UAE RTG board was always address space aligned. It is wrong in UAE mapping mode.
+- Only swallow hardware horizontal and vertical mouse movement when in mouse driver mode, not mouse wheel.
+- Improved programmed refresh rate hsync start and end validation to prevent crashes if weird mode is set.
+  (BoggleDop / Sanity)
+- Added hardfile virtual bad block support. uaehf.device and hardware SCSI emulation only. Create geometry text file
+  (<name of hardfile.hdf>.geo) in same directory as hardfile, add badblocks=<blocks> line. (<blocks> can be range, 10-100
+  or single value or multiple ranges/values, for example 10-100,200,1000-20000) Max 8 bad block values/ranges supported.
+  Error is returned if block in badblock range is attempted to be read or written.
+- OS4.x UAE trap mode now uses hybrid busy wait mode. Performance has improved again, directory filesystem speed is now
+  fully usable and uaegfx is also noticeably faster.
+- UAE indirect trap stability updates.
+
+Beta 8:
+
+- Game Ports joystick type was always empty (undefined).
+- Quickstart panel CDTV/CD32 CD path name label was "DF1:", not "CD". (Broke when bridgeboard drive support was added)
+- Dragndrop to emulation window didn't work correctly until GUI was opened at least once.
+- Added screenshot autoclip mode, uses autoscale display size/position detection.
+  Also added following config file only entries: (all config entries need win32. prefix)
+  screenshot_min_width and screenshot_min_height: minimum autoclip size in lores pixels.
+  screenshot_max_width and screenshot_max_height: maximum autoclip size in lores pixels.
+  screenshot_width and screenshot_height: forced screenshot size (non-autoclip mode only)
+  screenshot_x and screenshot_y: position/offset of screenshot (non-autoclip mode only)
+  screenshot_mult_width and screenshot_mult_height: 1x, 2x, 3x, .. 8x screenshot size multiplier.
+  screenshot_output_width_limit and screenshot_output_height_limit: minimum screenshot size, if original size is smaller,
+  multiplier is increased until width/height is same or larger.
+- More internal changes to support more than one enabled RTG board at the same time. (Still lots more to do..)
+- 68020/030 RTE didn't generate exception when it encountered 68040+ or 68010 only stack frame types.
+- Return error code instead of crashing if bsdsocket emulation sendto() tries to use unsupported raw protocol.
+- Switching from relative path mode back to normal mode could have caused repeated crashing.
+- Do not write reserved block at the end of FileInfoBlock back to Amiga side, Pre-2.x dos commands don't allocate
+  complete FIB structure. (Was side-effect of OS4.x compatible trap system)
+- Basic NERO nrg CD image support added. Data and audio tracks seems to work.
+- CDFS mounting selects Joliet volume label if found. (Joliet volume label is not restricted to capital ASCII letters)
+- uaenet.device S2_READORPHAN should not filter unknown multicast addresses.
+
+Beta 7:
+
+- Fullscreen + paused + enter GUI: GUI was invisible.
+- OSD FPS counter shows 'P' in pause mode.
+- Directory filesystem drive total/used values are not anymore converted to internal block count before
+  again converting to AmigaOS block count. Reported Amiga-side size is now accurate.
+- Create more sane looking fake geometry for directory harddrives. (Not that anyone really cares)
+- Directory filesystem harddrive block size is dynamically adjusted to enable correct drive size information
+  even if drive is large (>2T), as long as AOS also supports it (OS3.9+ probably required).
+- If m68k FPU is in float (32-bit) precision mode, force output register value to 32-bit precision after each
+  host FPU operation to guarantee correct result. (Kilofix / Iris missing geometry)
+- Clear UAE boot ROM temporary variables at reset. (OS4.x reset loop after warm reset)
+- Added 20 bytes of empty space after directory filesystem volume node. If OS4 decides to use it for something.
+  (OS4 volume node is 20 bytes larger. UAE puts it in hardware board space, it can't use DOS functions to allocate it).
+- Implemented OS4 ACTION_FILESYSTEM_ATTR directory filesystem dos packet.
+- Selecting none in Game Ports reverted back to previously selected device/layout.
+
+Beta 6:
+
+- Fixed uaehf.device and input on the fly device change invalid free() calls.
+- Game Ports panel autofire/joystick type setting was not remembered.
+- Do not queue new uaenet.device uae_Signal() call if previous is still in queue.
+- Do not call any host OS functions from uaegfx trap functions, trap function can run in different thread context
+  which can cause strange side-effects. OS4.x uaegfx resolution changes should be safe again.
+- Added shellexec custom input event/uae-configuration command that can execute Amiga-side commands or scripts.
+  Uses SystemTagList() with NIL: Input and Output handles if KS2+, Execute() with NIL: Output if pre-KS2.
+  Only works when UAE Boot ROM is active, dos.library has been initialized and AmigaOS is running normally.
+- Display panel color component gamma value calculation fixed, any brightness or contrast modification was too dark.
+
+Beta 5:
+
+- Game Ports mouse and joystick was always reset to defaults (b4)
+- Dark palette fix adjustment is now calculated before other adjustments (brightness, contrast, gamma)
+- Dark palette fix third option added, pre-converted Atari ST palette increased to full range, 12-bit EEE becomes
+  nearly full white, FCFCFC in 24-bit RGB space. (Not FFFFFF because palette would not be linear anymore)
+
+OS4 UAE expansion updates:
+
+- Directory filesystem random errors fixed.
+- Directory filesystem/CDFS CD on the fly insertion/removal supported! (It wasn't that difficult after all)
+- uaescsi.device supported.
+
+NOTE: Try not to change uaegfx resolution in OS4, it can cause mysterious crashes or side-effects. Fix coming later.
+
+TODO: bsdsocket.library and fixing random hangs.
+
+Beta 4:
+
+- Default game ports config without default.uae (Mouse + keyboard layout A) was not set. (b3)
+- On the fly input device change crash fix. (b3)
+- Monochrome mode config file entry added.
+- Atari ST dark palette fix moved to Brightness/Contrast/etc select menu and added alternate mode.
+- UAE expansion resident structures are now injected to execbase ResList. Now less important expansions are initialized
+  later. Previously all were initialized during diag init time. Now also uses normal RTF_AFTERDOS resident to start
+  clipboard sharing instead of ugly hack.
+- Simplified rawinput support, also removed rawinput checks, added when long time ago WINE didn't fully support rawinput.
+- Added harddrive master write protection checkbox to Misc panel. WARNING: don't use it with hardfiles unless you know
+  exactly what you are doing.
+- UAE Boot ROM with PPC native OS message now asks to enable correct boot ROM mode.
+ 
+OS4 UAE expansion updates:
+
+- Clipboard sharing is now supported.
+- Magic mouse is now supported.
+- Virtual mouse driver is now supported.
+- uaenative.library converted to new trap system but not tested.
+- uaescsi.device initialization converted to new trap system, device will open now without crashing but any CD access
+  commands will not work (and most likely will also crash strangely).
+
+Still not supported:
+
+- Directory filesystem on the fly insertion/removal, including CDFS CD swaps. Getting this to work will be extremely
+  complex task. Not sure if it is worth the trouble.
+- bsdsocket.library
+- uaeahi (Probably not needed, PCI sound card emulation is better choice)
+
+Beta 3:
+
+- When matching config file and on the fly connected game controllers, first check if both id and friendly name match and
+  only if no match, check id only and finally name only. Some multi slot controller adapters have unique name for each
+  port but all ports have same ID. (Was id and then name matching previously)
+- Remembered input device selections are now forgotten when new config is loaded.
+- On the fly unplugged devices are now properly remembered and re-inserted if on the fly reconnected.
+- PC Bridge disk drives raw image support (extended adf, ipf and so on.) Standard DOS disks only, no copy protections
+  or other tricks supported. Read-only, writing is not supported.
+- JIT slider now only shows power of 2 cache size values and max is 16384. (Max was already changed in previous betas)
+- Linked config files loaded unreliably (or never) due to uninitialized variable.
+- Real storage device (harddisk, memory card etc..) failed to open the device if it didn't have device path, only
+  drive letter.
+- CDFS automount didn't mount CDs with empty label, dos does not like empty volume names, replace empty name with "NO_LABEL"
+- BPLCON0 BYPASS bit emulated. AGA-only, bypasses palette selection, creates gray scale output. (Microcosm cheat mode effect)
+- Added A1000 composite out monochrome output mode emulation when BPLCON0 COLOR bit is zeroed. Option in advanced
+  chipset panel. Only emulated if no video port display devices enabled, monochrome emulation shares same code (and
+  in real world it is also not possible, RGB video out is not affected by COLOR bit). Also added always-on monochrome
+  mode option to Display panel. (Uses HRM documented gray scale brightness = 30% red, 60% green and 10% blue)
+- "Atari ST palette fix" added to Display panel, called "Dark palette fix". It is wrong to mention Atari ST in GUI :)
+  There are few stupid Atari ST ports that use original palette (3 bits/component) = halved brightness in Amiga.
+- UAE autoconfig board/boot ROM selection added to ROM panel. Do not touch unless you wan to run OS4 + UAE expansions.
+  OS4 + UAE expansions: must be set to last option, "New UAE (128k, ROM, Indirect)". (Quickly added to GUI, probably
+  will change in future versions)
+
+OS4 compatible UAE autoconfig board, boot ROM and communication interface.
+
+Currently supported UAE devices:
+
+- Directory harddrives.
+- uaehf.device (UAE HD controller hardfiles)
+- uaegfx RTG. (Copy OS3.x uaegfx and uaegfx.info to OS4.x Devs:Monitors)
+- uaenet.device
+- uae.resource
+- uaelib ("uaelib_demux" trap)
+
+Not yet supported (lots more work needed):
+
+- bsdsocket.library (This is the most difficult)
+- uaenative.library
+- clipboard sharing
+- uaescsi.device
+- virtual mouse driver
+- on the fly directory harddrive changes.
+
+And everything else that was not mentioned.
+
+Notes:
+
+- Slower than normal host<>Amiga communication because every read or write that accesses Amiga memory needs to be
+  done in Amiga side (due to non-1:1 logical/physical mapping). It will never be as fast as direct communication.
+- Remember to set ROM panel UAE expansion type to "New UAE (128k, ROM, Indirect)".
+- Directory harddrive (copied from HDF) OS4 installation will boot but it is not recommended, it is slower
+  than HDF and there is mysterious issue that causes random read errors. (Missing font requester when booting is the
+  most common side-effect)
+- Most UAE expansions have preliminary updates for indirect trap support and support required multiple major
+  changes = many things can be strangely broken..
+
+Development speed of OS4 compatible UAE expansion and priority of features mainly depends on donations.
+
+
+Beta 2:
+
+- Game Ports panel keyboard layouts didn't load from config file. (b1)
+- Only first (of 3) Input panel keyboard config slot was loaded correctly. (b1)
+- Other input handling fixes (very old, old and b1) and updates. Some problems probably still remain unfixed.
+- GUI allowed unsupported combination: more compatible CPU ticked in JIT + 68040/68060 modes.
+- Hardfile SCSI emulation READ CAPACITY block count off by one if PMI bit was set.
+- MODE SENSE (10) added to HD SCSI emulator.
+
+Beta 1:
+
+- Added extra validation checks for STORAGE_DEVICE_DESCRIPTOR, buggy drivers may return invalid (negative) offset
+  values.
+- 64-bit JIT harmless "Warning! 12 is locked" log spamming disabled.
+- Updated copper/blitter cycle conflict emulation. It only triggers when CPU writes to COPJMP, Copper is waiting and
+  Copper DMA is enabled (and blitter uses same cycle). If Copper DMA was off, bug won't trigger, even if DMA gets
+  enabled few cycles later. Copper bug emulation is again always enabled if 68000 and cycle-exact config.
+- Cancel main thread sleep state immediately (Sleep due to CPU idle or similar) if PPC thread caused mainboard interrupt-
+  This should reduce PPC to M68K interrupt emulation latency.
+- Hardware RTG emulation rendered same frame twice in some situations. Caused very slow performance in triple buffered mode.
+- Debugger keyboard presses were buffered and output to Amiga-side when debugger was exited.
+- Starting disk DMA does not flush Paula internal 16 bit buffer. Poll DSKBYTR for DSKSYNC, immediately start disk DMA with
+  WORDSYNC enabled: following sync word must not be missed. (Original Virus really slow loading in cycle-exact mode)
+- Chip ram was marked as 16-bit Fast RAM for the CPU (no DMA contention emulation) if any memwatch point was active.
+- Amithlon partition type (0x78/0x30) support was broken, partitions were detected but it was not possible to mount them.
+- Added SX32 Pro board and ROM image. (Not all RAM sizes are correctly mapped)
+- Only unmap Z3 Fast RAM at reset if Z3 mapping mode is "Real" for better compatibility with old configs that assume
+  Z3 RAM does not temporarily disappear at boot.
+- JIT on/off on the fly change without other CPU settings changed at the same time with uae-configuration didn't work.
+- Hardware emulation autoconfig board UAE interface first working feature: uae-configuration now works under OS4
+  Requires also updated uae-configuration, interface can also work under other non-m68k AmigaOS operating systems,
+  only requirement is simple native uae-configuration port. Interface design is not final yet.
+- If CSPPC or BPPC is booted with empty or zero size flash rom image, fake resident idtag is automatically added that
+  fools official flash rom updater to detect working board, "updating" the empty flash with full image (updater
+  contains full flash rom image in encrypted format)
+- Debugger memwatch points can now match only CPU instruction (CPUI) or only CPU data accesses (CPUD, CPUDR, CPUDW)
+- "Heat map" debugger added, shows optional visual heatmap of CPU and DMA accesses. Can list highest addresses used by
+  CPU instruction fetches or all addresses that single device accessed (Some DMA channel, CPU)
+- Some AGA modes were incorrectly detected as bitplane DMA overrunning causing screen corruption.
+- AROS ROM updated.
+
+Input system and mapping updates:
+
+- Added SPC_SWAPJOYPORTS input event, swaps gameports joystick ports.
+- Added END+J default mapping = SPC_SWAPJOYPORTS.
+- Device autoswitch didn't ignore button release without matching press.
+- Device autoswitch switches to new Game Ports custom event if it has fire button mapped to mouse or gamepad.
+- "WinUAE null keyboard" renamed to "WinUAE keyboard", this is now the default global virtual keyboard. GamePorts panel
+  only uses this keyboard, multiple keyboards are only supported in Input panel mode and only if manually enabled.
+  Reduces complexity and confusion when moving configurations between systems with different number of keyboards.
+- Game Ports custom mapping rewritten. Now Game Ports list has 6 custom slots which can me inserted to any joystick port.
+  New custom mapping data is also saved to separate config entries, one per slot.
+- Old Game Ports custom config is automatically converted to new custom mapping system.
+- Removed X-Arcade built-in layouts. Re-create them with new custom mapping system if needed.
+- Cleared custom input event string equals setting event to "<none>".
+- Fixed since the beginning bug that caused incorrectly matched input device(s) and input config when config was loaded
+  with different connected input devices and order of devices was also different.
+- Rewritten game ports validation (Detect and fix if same device in multiple ports etc..).
+- Old config files should still work like previously except: game Ports custom mapping and first keyboard input config
+  goes to WinUAE keyboard slot.
+- Last few Game Ports panel inserted devices (layout or real input device) are remembered. For example if config is loaded
+  with joypad A inserted in port 2 but pad is not plugged in, then user manually changes it to joypad B. Now if pad A is
+  later reinserted and pad B is removed, A is automatically put in port 2. It also works with keyboard layouts or new
+  custom layouts, if keyboard layout was previously selected, then it was later replaced with gamepad, if gamepad is unplugged
+  on the fly, previous keyboard layout is automatically selected.
+
+Game Ports panel "simple" custom mapping should be finally very intuitive to use.
+
 3.2.2
 
 - JIT x64 R12 special case fix.

@@ -99,6 +99,7 @@ static LPDIRECT3DTEXTURE9 lpPostTempTexture;
 #define SHADER_POST 0
 static struct shaderdata shaders[MAX_SHADERS];
 
+static IDirect3DSurface9 *screenshotsurface;
 static D3DFORMAT tformat;
 static int d3d_enabled, d3d_ex;
 static IDirect3D9 *d3d;
@@ -148,7 +149,7 @@ static int max_texture_w, max_texture_h;
 static int tin_w, tin_h, tout_w, tout_h, window_h, window_w;
 static int t_depth, dmult, dmultx;
 static int required_sl_texture_w, required_sl_texture_h;
-static int vsync2, guimode, maxscanline;
+static int vsync2, guimode, maxscanline, variablerefresh;
 static int resetcount;
 static double cursor_x, cursor_y;
 static bool cursor_v, cursor_scale;
@@ -2168,6 +2169,9 @@ static int restoredeviceobjects (void)
 static void D3D_free2 (void)
 {
 	invalidatedeviceobjects ();
+	if (screenshotsurface)
+		screenshotsurface->Release();
+	screenshotsurface = NULL;
 	if (d3ddev) {
 		d3ddev->Release ();
 		d3ddev = NULL;
@@ -2258,7 +2262,7 @@ static int getd3dadapter (IDirect3D9 *d3d)
 static const TCHAR *D3D_init2 (HWND ahwnd, int w_w, int w_h, int depth, int *freq, int mmult)
 {
 	HRESULT ret, hr;
-	static TCHAR errmsg[100] = { 0 };
+	static TCHAR errmsg[300] = { 0 };
 	D3DDISPLAYMODE mode = { 0 };
 	D3DCAPS9 d3dCaps;
 	int adapter;
@@ -2378,6 +2382,7 @@ static const TCHAR *D3D_init2 (HWND ahwnd, int w_w, int w_h, int depth, int *fre
 	modeex.Format = mode.Format;
 
 	vsync2 = 0;
+	variablerefresh = ap.gfx_vsync < 0;
 	int hzmult = 0;
 	if (isfullscreen () > 0) {
 		dpp.FullScreen_RefreshRateInHz = getrefreshrate (modeex.Width, modeex.Height);
@@ -2611,9 +2616,14 @@ static const TCHAR *D3D_init2 (HWND ahwnd, int w_w, int w_h, int depth, int *fre
 		if (forcedframelatency >= 0)
 			hr = d3ddevex->SetMaximumFrameLatency (forcedframelatency);
 		else if (dpp.PresentationInterval == D3DPRESENT_INTERVAL_IMMEDIATE && (v > 1 || !vsync))
-			hr = d3ddevex->SetMaximumFrameLatency (vsync ? (hzmult < 0 && !ap.gfx_strobo ? 2 : 1) : 0);
+			hr = d3ddevex->SetMaximumFrameLatency (vsync ? (hzmult < 0 && !ap.gfx_strobo && !variablerefresh ? 2 : 1) : 0);
 		if (FAILED (hr))
 			write_log (_T("%s: SetMaximumFrameLatency() failed: %s\n"), D3DHEAD, D3D_ErrorString (hr));
+	}
+
+	hr = d3ddev->CreateOffscreenPlainSurface(w_w, w_h, tformat, D3DPOOL_SYSTEMMEM, &screenshotsurface, NULL);
+	if (FAILED(hr)) {
+		write_log(_T("%s: CreateOffscreenPlainSurface failed: %s\n"), D3DHEAD, D3D_ErrorString(hr));
 	}
 
 	return 0;
@@ -2933,7 +2943,7 @@ static void D3D_render2 (void)
 	LPDIRECT3DTEXTURE9 srctex = texture;
 	UINT uPasses, uPass;
 
-	if (!isd3d ())
+	if (!isd3d () || !texture)
 		return;
 
 	hr = d3ddev->Clear (0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, d3ddebug ? 0x80 : 0, 0), 0, 0);
@@ -3355,11 +3365,11 @@ void D3D_showframe (void)
 	if (!isd3d ())
 		return;
 	if (currprefs.turbo_emulation) {
-		if (!(dpp.PresentationInterval & D3DPRESENT_INTERVAL_IMMEDIATE) && wasstilldrawing_broken) {
+		if ((!(dpp.PresentationInterval & D3DPRESENT_INTERVAL_IMMEDIATE) || variablerefresh) && wasstilldrawing_broken) {
 			static int frameskip;
 			if (currprefs.turbo_emulation && frameskip-- > 0)
 				return;
-			frameskip = 50;
+			frameskip = 10;
 		}
 		D3D_showframe2 (false);
 	} else {
@@ -3367,8 +3377,8 @@ void D3D_showframe (void)
 		if (vsync2 == -1 && !currprefs.turbo_emulation) {
 			D3D_showframe2 (true);
 		}
+		flushgpu(true);
 	}
-	flushgpu (true);
 }
 
 void D3D_showframe_special (int mode)
@@ -3377,6 +3387,8 @@ void D3D_showframe_special (int mode)
 	if (!isd3d ())
 		return;
 	if (currprefs.turbo_emulation)
+		return;
+	if (pause_emulation)
 		return;
 	hr = d3ddev->Clear (0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, d3ddebug ? 0x80 : 0, 0), 0, 0);
 	D3D_showframe2 (true);
@@ -3455,10 +3467,37 @@ void D3D_guimode (bool guion)
 	waitfakemode ();
 	if (!isd3d ())
 		return;
+	D3D_render2();
+	D3D_showframe2(true);
 	hr = d3ddev->SetDialogBoxMode (guion ? TRUE : FALSE);
 	if (FAILED (hr))
 		write_log (_T("%s: SetDialogBoxMode %s\n"), D3DHEAD, D3D_ErrorString (hr));
 	guimode = guion;
+}
+
+LPDIRECT3DSURFACE9 D3D_capture(int *w, int *h, int *bits)
+{
+	LPDIRECT3DSURFACE9 rt;
+	HRESULT hr;
+
+	waitfakemode();
+	if (!isd3d())
+		return NULL;
+	hr = d3ddev->GetRenderTarget(0, &rt);
+	if (FAILED(hr)) {
+		write_log(_T("%s: GetRenderTarget() failed: %s\n"), D3DHEAD, D3D_ErrorString(hr));
+		return NULL;
+	}
+	hr = d3ddev->GetRenderTargetData(rt, screenshotsurface);
+	rt->Release();
+	if (FAILED(hr)) {
+		write_log(_T("%s: GetRenderTargetData() failed: %s\n"), D3DHEAD, D3D_ErrorString(hr));
+		return NULL;
+	}
+	*w = window_w;
+	*h = window_h;
+	*bits = t_depth;
+	return screenshotsurface;
 }
 
 HDC D3D_getDC (HDC hdc)

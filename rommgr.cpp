@@ -95,7 +95,7 @@ struct romdata *getromdatabypath (const TCHAR *path)
 	return NULL;
 }
 
-#define NEXT_ROM_ID 160
+#define NEXT_ROM_ID 162
 
 #define ALTROM(id,grp,num,size,flags,crc32,a,b,c,d,e) \
 { _T("X"), 0, 0, 0, 0, 0, size, id, 0, 0, flags, (grp << 16) | num, 0, NULL, crc32, a, b, c, d, e },
@@ -368,6 +368,8 @@ static struct romdata roms[] = {
 	0xb2dae8c4, 0xcdfe2d96, 0xe44d4f8d, 0x3833a5e8, 0xb6c832fd, 0xc7b341a9, NULL, NULL },
 	{ _T("M-Tec E-Matrix 530"), 0, 0, 0, 0, _T("EMATRIX530\0"), 65536, 144, 0, 0, ROMTYPE_CB_EMATRIX, 0, 0, NULL,
 	0x3942d827, 0x5aaf118f, 0x61fc3083, 0x1435b87c, 0x8bdab6a4, 0x59b4ee22, NULL, NULL },
+	{ _T("SX32 Pro"), 0, 0, 0, 0, _T("SX32PRO\0"), 65536, 160, 0, 0, ROMTYPE_CB_SX32PRO, 0, 0, NULL,
+	0xbfd68a88, 0x84a50880, 0x76917549, 0xadf33b16, 0x8a869adb, 0x9e5a6fac, NULL, NULL },
 
 	{ _T("Preferred Technologies Nexus"), 1, 0, 1, 0, _T("PTNEXUS\0"), 8192, 139, 0, 0, ROMTYPE_PTNEXUS, 0, 0, NULL,
 	0xf495879a, 0xa3bd0202, 0xe14aa5b6, 0x49d3ce88, 0x22975950, 0x6500dbc2, NULL, NULL },
@@ -433,6 +435,8 @@ static struct romdata roms[] = {
 	ALTROMPN(157, 1, 2, 8192, ROMTYPE_EVEN | ROMTYPE_8BIT, NULL, 0x39b0075e, 0xf6644ea0, 0x6c3ed349, 0xfb0fb6b4, 0xa9f07655, 0x0b104179)
 	{ _T("Phoenix Board SCSI v.J"), 3, 1, 3, 1, _T("PBSCSI\0"), 32768, 159, 0, 0, ROMTYPE_PHOENIXB, 0, 0, NULL,
 	0x1f672e4b, 0xb20d50b8, 0x31ec9823, 0xfa732fc6, 0x522ecc6a, 0xae36ec33, NULL, NULL },
+	{ _T("IVS GramdSlam/Trumpcard Pro v4.9"), 4, 9, 4, 9, _T("IVSPRO\0"), 16384, 161, 0, 0, ROMTYPE_IVSTPRO, 0, 0, NULL,
+	0x4a15f224, 0x29500b47, 0x289e84ac, 0x575e3c7d, 0x82199b45, 0x605d8fc9, NULL, NULL },
 
 	{ _T("CyberStorm MK I 68040"), 0, 0, 0, 0, _T("CSMKI\0"), 32768, 95, 0, 0, ROMTYPE_CB_CSMK1, 0, 0, NULL,
 	  0, 0, 0, 0, 0, 0, NULL, _T("cyberstormmk1_040.rom") },
@@ -1746,13 +1750,17 @@ struct boardromconfig *get_device_rom_new(struct uae_prefs *p, int romtype, int 
 	return brc;
 }
 
-void clear_device_rom(struct uae_prefs *p, int romtype, int devnum)
+void clear_device_rom(struct uae_prefs *p, int romtype, int devnum, bool deleteDevice)
 {
 	int index;
 	struct boardromconfig *brc = get_device_rom(p, romtype, devnum, &index);
 	if (!brc)
 		return;
-	memset(&brc->roms[index], 0, sizeof(struct romconfig));
+	if (deleteDevice) {
+		memset(brc, 0, sizeof(struct boardromconfig));
+	} else {
+		memset(&brc->roms[index], 0, sizeof(struct romconfig));
+	}
 }
 
 struct boardromconfig *get_device_rom(struct uae_prefs *p, int romtype, int devnum, int *index)

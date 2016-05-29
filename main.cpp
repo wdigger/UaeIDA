@@ -160,14 +160,21 @@ void fixup_prefs_dimensions (struct uae_prefs *prefs)
 {
 	fixup_prefs_dim2 (&prefs->gfx_size_fs);
 	fixup_prefs_dim2 (&prefs->gfx_size_win);
-	if (prefs->gfx_apmode[1].gfx_vsync)
+	if (prefs->gfx_apmode[1].gfx_vsync > 0)
 		prefs->gfx_apmode[1].gfx_vsyncmode = 1;
 
 	for (int i = 0; i < 2; i++) {
 		struct apmode *ap = &prefs->gfx_apmode[i];
 		ap->gfx_vflip = 0;
 		ap->gfx_strobo = false;
-		if (ap->gfx_vsync) {
+		if (ap->gfx_vsync < 0) {
+			// adaptive sync
+			ap->gfx_vsyncmode = 0;
+			ap->gfx_vflip = 0;
+			if (ap->gfx_backbuffers >= 2)
+				ap->gfx_backbuffers = 1;
+			ap->gfx_strobo = prefs->lightboost_strobo;
+		} else if (ap->gfx_vsync > 0) {
 			if (ap->gfx_vsyncmode) {
 				// low latency vsync: no flip only if no-buffer
 				if (ap->gfx_backbuffers >= 1)
@@ -322,7 +329,7 @@ void fixup_cpu (struct uae_prefs *p)
 	}
 }
 
-void fixup_prefs (struct uae_prefs *p)
+void fixup_prefs (struct uae_prefs *p, bool userconfig)
 {
 	int err = 0;
 
@@ -346,11 +353,15 @@ void fixup_prefs (struct uae_prefs *p)
 			p->custom_memory_sizes[1] = p->cpuboardmem1_size / 2;
 			p->custom_memory_addrs[0] = 0x18000000 - p->custom_memory_sizes[0];
 			p->custom_memory_addrs[1] = 0x18000000;
+			p->custom_memory_mask[0] = 0x10000000;
+			p->custom_memory_mask[1] = 0x18000000;
 		} else {
 			p->custom_memory_sizes[0] = p->cpuboardmem1_size;
 			p->custom_memory_sizes[1] = 0;
 			p->custom_memory_addrs[0] = 0x18000000 - p->custom_memory_sizes[0];
 			p->custom_memory_addrs[1] = 0;
+			p->custom_memory_mask[0] = 0x10000000;
+			p->custom_memory_mask[1] = 0;
 		}
 	}
 
@@ -388,19 +399,22 @@ void fixup_prefs (struct uae_prefs *p)
 		}
 	}
 
-	if (p->rtgmem_size > max_z3fastmem && p->rtgmem_type == GFXBOARD_UAE_Z3) {
-		error_log (_T("Graphics card memory size %d (0x%x) larger than maximum reserved %d (0x%x)."), p->rtgmem_size, p->rtgmem_size, max_z3fastmem, max_z3fastmem);
-		p->rtgmem_size = max_z3fastmem;
-		err = 1;
-	}
+	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+		struct rtgboardconfig *rbc = &p->rtgboards[i];
+		if (rbc->rtgmem_size > max_z3fastmem && rbc->rtgmem_type == GFXBOARD_UAE_Z3) {
+			error_log (_T("Graphics card memory size %d (0x%x) larger than maximum reserved %d (0x%x)."), rbc->rtgmem_size, rbc->rtgmem_size, max_z3fastmem, max_z3fastmem);
+			rbc->rtgmem_size = max_z3fastmem;
+			err = 1;
+		}
 
-	if ((p->rtgmem_size & (p->rtgmem_size - 1)) != 0 || (p->rtgmem_size != 0 && (p->rtgmem_size < 0x100000))) {
-		error_log (_T("Unsupported graphics card memory size %d (0x%x)."), p->rtgmem_size, p->rtgmem_size);
-		if (p->rtgmem_size > max_z3fastmem)
-			p->rtgmem_size = max_z3fastmem;
-		else
-			p->rtgmem_size = 0;
-		err = 1;
+		if ((rbc->rtgmem_size & (rbc->rtgmem_size - 1)) != 0 || (rbc->rtgmem_size != 0 && (rbc->rtgmem_size < 0x100000))) {
+			error_log (_T("Unsupported graphics card memory size %d (0x%x)."), rbc->rtgmem_size, rbc->rtgmem_size);
+			if (rbc->rtgmem_size > max_z3fastmem)
+				rbc->rtgmem_size = max_z3fastmem;
+			else
+				rbc->rtgmem_size = 0;
+			err = 1;
+		}
 	}
 	
 	if (p->z3fastmem_size > max_z3fastmem) {
@@ -463,11 +477,6 @@ void fixup_prefs (struct uae_prefs *p)
 		p->chipmem_size = 0x200000;
 		err = 1;
 	}
-	if (p->chipmem_size > 0x200000 && p->rtgmem_size && gfxboard_get_configtype(p->rtgmem_type) == 2) {
-		error_log(_T("You can't use Zorro II RTG and more than 2MB chip at the same time."));
-		p->chipmem_size = 0x200000;
-		err = 1;
-	}
 	if (p->mem25bit_size > 128 * 1024 * 1024 || (p->mem25bit_size & 0xfffff)) {
 		p->mem25bit_size = 0;
 		error_log(_T("Unsupported 25bit RAM size"));
@@ -481,30 +490,38 @@ void fixup_prefs (struct uae_prefs *p)
 		error_log (_T("Unsupported CPU Board RAM size."));
 	}
 
-	if (p->rtgmem_type >= GFXBOARD_HARDWARE) {
-		if (gfxboard_get_vram_min(p->rtgmem_type) > 0 && p->rtgmem_size < gfxboard_get_vram_min (p->rtgmem_type)) {
-			error_log(_T("Graphics card memory size %d (0x%x) smaller than minimum hardware supported %d (0x%x)."),
-				p->rtgmem_size, p->rtgmem_size, gfxboard_get_vram_min(p->rtgmem_type), gfxboard_get_vram_min(p->rtgmem_type));
-			p->rtgmem_size = gfxboard_get_vram_min (p->rtgmem_type);
+	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+		struct rtgboardconfig *rbc = &p->rtgboards[i];
+		if (p->chipmem_size > 0x200000 && rbc->rtgmem_size && gfxboard_get_configtype(rbc) == 2) {
+			error_log(_T("You can't use Zorro II RTG and more than 2MB chip at the same time."));
+			p->chipmem_size = 0x200000;
+			err = 1;
 		}
-		if (p->address_space_24 && gfxboard_get_configtype(p->rtgmem_type) == 3) {
-			p->rtgmem_type = GFXBOARD_UAE_Z2;
-			p->rtgmem_size = 0;
-			error_log (_T("Z3 RTG and 24-bit address space are not compatible."));
+		if (rbc->rtgmem_type >= GFXBOARD_HARDWARE) {
+			if (gfxboard_get_vram_min(rbc) > 0 && rbc->rtgmem_size < gfxboard_get_vram_min (rbc)) {
+				error_log(_T("Graphics card memory size %d (0x%x) smaller than minimum hardware supported %d (0x%x)."),
+					rbc->rtgmem_size, rbc->rtgmem_size, gfxboard_get_vram_min(rbc), gfxboard_get_vram_min(rbc));
+				rbc->rtgmem_size = gfxboard_get_vram_min (rbc);
+			}
+			if (p->address_space_24 && gfxboard_get_configtype(rbc) == 3) {
+				rbc->rtgmem_type = GFXBOARD_UAE_Z2;
+				rbc->rtgmem_size = 0;
+				error_log (_T("Z3 RTG and 24-bit address space are not compatible."));
+			}
+			if (gfxboard_get_vram_max(rbc) > 0 && rbc->rtgmem_size > gfxboard_get_vram_max(rbc)) {
+				error_log(_T("Graphics card memory size %d (0x%x) larger than maximum hardware supported %d (0x%x)."),
+					rbc->rtgmem_size, rbc->rtgmem_size, gfxboard_get_vram_max(rbc), gfxboard_get_vram_max(rbc));
+				rbc->rtgmem_size = gfxboard_get_vram_max(rbc);
+			}
 		}
-		if (gfxboard_get_vram_max(p->rtgmem_type) > 0 && p->rtgmem_size > gfxboard_get_vram_max(p->rtgmem_type)) {
-			error_log(_T("Graphics card memory size %d (0x%x) larger than maximum hardware supported %d (0x%x)."),
-				p->rtgmem_size, p->rtgmem_size, gfxboard_get_vram_max(p->rtgmem_type), gfxboard_get_vram_max(p->rtgmem_type));
-			p->rtgmem_size = gfxboard_get_vram_max(p->rtgmem_type);
+		if (p->address_space_24 && rbc->rtgmem_size && rbc->rtgmem_type == GFXBOARD_UAE_Z3) {
+			error_log (_T("Z3 RTG and 24bit address space are not compatible."));
+			rbc->rtgmem_type = GFXBOARD_UAE_Z2;
 		}
-	}
-	if (p->address_space_24 && p->rtgmem_size && p->rtgmem_type == GFXBOARD_UAE_Z3) {
-		error_log (_T("Z3 RTG and 24bit address space are not compatible."));
-		p->rtgmem_type = GFXBOARD_UAE_Z2;
-	}
-	if (p->rtgmem_type == GFXBOARD_UAE_Z2 && (p->chipmem_size > 2 * 1024 * 1024 || getz2size (p) > 8 * 1024 * 1024 || getz2size (p) < 0)) {
-		p->rtgmem_size = 0;
-		error_log (_T("Too large Z2 RTG memory size."));
+		if (rbc->rtgmem_size && rbc->rtgmem_type == GFXBOARD_UAE_Z2 && (p->chipmem_size > 2 * 1024 * 1024 || getz2size (p) > 8 * 1024 * 1024 || getz2size (p) < 0)) {
+			rbc->rtgmem_size = 0;
+			error_log (_T("Too large Z2 RTG memory size."));
+		}
 	}
 
 	if (p->cs_z3autoconfig && p->address_space_24) {
@@ -557,10 +574,12 @@ void fixup_prefs (struct uae_prefs *p)
 		p->z3chipmem_size = 0;
 		err = 1;
 	}
-	if ((p->rtgmem_size > 0 && p->rtgmem_type == GFXBOARD_UAE_Z3) && p->address_space_24) {
-		error_log (_T("UAEGFX RTG can't be used if address space is 24-bit."));
-		p->rtgmem_size = 0;
-		err = 1;
+	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+		if ((p->rtgboards[i].rtgmem_size > 0 && p->rtgboards[i].rtgmem_type == GFXBOARD_UAE_Z3) && p->address_space_24) {
+			error_log (_T("UAEGFX Z3 RTG can't be used if address space is 24-bit."));
+			p->rtgboards[i].rtgmem_size = 0;
+			err = 1;
+		}
 	}
 
 #if !defined (BSDSOCKET)
@@ -570,6 +589,10 @@ void fixup_prefs (struct uae_prefs *p)
 		err = 1;
 	}
 #endif
+	if (p->socket_emu && p->uaeboard >= 3) {
+		write_log(_T("bsdsocket.library is not compatible with indirect UAE Boot ROM.\n"));
+		p->socket_emu = 0;
+	}
 
 	if (p->nr_floppies < 0 || p->nr_floppies > 4) {
 		error_log (_T("Invalid number of floppies.  Using 2."));
@@ -595,7 +618,7 @@ void fixup_prefs (struct uae_prefs *p)
 	}
 	if (p->parallel_postscript_emulation)
 		p->parallel_postscript_detection = 1;
-	if (p->cs_compatible == 1) {
+	if (p->cs_compatible == CP_GENERIC) {
 		p->cs_fatgaryrev = p->cs_ramseyrev = p->cs_mbdmac = -1;
 		p->cs_ide = 0;
 		if (p->cpu_model >= 68020) {
@@ -712,6 +735,7 @@ void fixup_prefs (struct uae_prefs *p)
 
 	built_in_chipset_prefs (p);
 	blkdev_fix_prefs (p);
+	inputdevice_fix_prefs(p, userconfig);
 	target_fixup_options (p);
 }
 
@@ -984,7 +1008,7 @@ static void parse_cmdline_and_init_file (int argc, TCHAR **argv)
 		target_cfgfile_load (&currprefs, optionsfile, CONFIG_TYPE_DEFAULT, default_config);
 #endif
 	}
-	fixup_prefs (&currprefs);
+	fixup_prefs (&currprefs, false);
 
 	parse_cmdline (argc, argv);
 }
@@ -1055,8 +1079,8 @@ static int real_main2 (int argc, TCHAR **argv)
 #endif
 	set_config_changed ();
 	if (restart_config[0]) {
-		default_prefs (&currprefs, 0);
-		fixup_prefs (&currprefs);
+		default_prefs (&currprefs, true, 0);
+		fixup_prefs (&currprefs, true);
 	}
 
 	if (! graphics_setup ()) {
@@ -1079,7 +1103,7 @@ static int real_main2 (int argc, TCHAR **argv)
 
 	if (console_emulation) {
 		consolehook_config (&currprefs);
-		fixup_prefs (&currprefs);
+		fixup_prefs (&currprefs, true);
 	}
 
 	if (! setup_sound ()) {
@@ -1131,7 +1155,7 @@ static int real_main2 (int argc, TCHAR **argv)
 #endif
 #endif
 
-	fixup_prefs (&currprefs);
+	fixup_prefs (&currprefs, true);
 #ifdef RETROPLATFORM
 	rp_fixup_options (&currprefs);
 #endif

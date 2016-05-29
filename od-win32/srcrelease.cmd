@@ -124,29 +124,22 @@ rm -rf fullrelease
 rm -rf test
 cd ..
 
-cd winuae_msvc10
-rm -rf debug
-rm -rf release
-rm -rf fullrelease
-rm -rf ipch
-rm -rf test
-rm -rf x64
-cd ..
-
-cd winuae_msvc11
-rm -rf debug
-rm -rf release
-rm -rf fullrelease
-rm -rf test
-rm -rf x64
-cd ..
-
 cd winuae_msvc14
 rm -rf debug
 rm -rf release
 rm -rf fullrelease
 rm -rf test
 rm -rf x64
+rm -rf packages
+cd ..
+
+cd winuae_msvc15
+rm -rf debug
+rm -rf release
+rm -rf fullrelease
+rm -rf test
+rm -rf x64
+rm -rf packages
 cd ..
 
 cd singlefilehelper
@@ -193,12 +186,12 @@ cd ..
 
 cd ..
 
-zip -9 -r winuaesrc *
+7z a -r winuaesrc *
 
-copy winuaesrc.zip e:\amiga\winuaepackets\winuaesrc%1.zip
-move winuaesrc.zip e:\amiga
+copy winuaesrc.7z e:\amiga\winuaepackets\winuaesrc%1.7z
+move winuaesrc.7z e:\amiga
 cd c:\projects\winuae\src\od-win32
-zip -9 winuaedebug%1 winuae_msvc14\fullrelease\winuae.pdb winuae_msvc14\x64\fullrelease\winuae.pdb
-move winuaedebug%1.zip e:\amiga\winuaepackets\debug\
+7z a winuaedebug%1 winuae_msvc14\fullrelease\winuae.pdb winuae_msvc14\x64\fullrelease\winuae.pdb
+move winuaedebug%1.7z e:\amiga\winuaepackets\debug\
 copy winuae_msvc14\fullrelease\winuae.pdb winuae_msvc14\x64\fullrelease\winuae.pdb d:\amiga\dump
 copy d:\amiga\winuae.exe d:\amiga\dump

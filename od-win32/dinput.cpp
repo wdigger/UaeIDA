@@ -34,6 +34,7 @@ int no_windowsmouse = 0;
 
 #include "sysdeps.h"
 #include "options.h"
+#include "traps.h"
 #include "rp.h"
 #include "inputdevice.h"
 #include "keybuf.h"
@@ -400,61 +401,15 @@ static int rawinput_available;
 static bool rawinput_registered;
 static int rawinput_reg;
 
-static bool test_rawinput (int usage)
-{
-	RAWINPUTDEVICE rid = { 0 };
-
-	rid.usUsagePage = 1;
-	rid.usUsage = usage;
-	if (RegisterRawInputDevices (&rid, 1, sizeof(RAWINPUTDEVICE)) == FALSE) {
-		write_log (_T("RAWINPUT test failed, usage=%d ERR=%d\n"), usage, GetLastError ());
-		return false;
-	}
-	rid.dwFlags |= RIDEV_REMOVE;
-	if (RegisterRawInputDevices (&rid, 1, sizeof(RAWINPUTDEVICE)) == FALSE) {
-		write_log (_T("RAWINPUT test failed (release), usage=%d, ERR=%d\n"), usage, GetLastError ());
-		return false;
-	}
-	write_log (_T("RAWINPUT test ok, usage=%d\n"), usage);
-	return true;
-}
-
-static int doregister_rawinput (void)
+static int doregister_rawinput (bool add)
 {
 	int num;
-	bool add;
 	RAWINPUTDEVICE rid[2 + 2 + MAX_INPUT_DEVICES] = { 0 };
-	int activate;
 
 	if (!rawinput_available)
 		return 0;
 
-	activate = 0;
-	for (int i = 0; i < MAX_INPUT_DEVICES; i++) {
-		if (di_mouse[i].acquired)
-			activate++;
-		if (di_joystick[i].acquired)
-			activate++;
-		if (di_keyboard[i].acquired)
-			activate++;
-	}
-
-#if RAWINPUT_DEBUG
-	write_log(_T("RAWHID ACT=%d REG=%d\n"), activate, rawinput_registered);
-#endif
-
-	if (rawinput_registered && activate)
-		return 1;
-	if (!rawinput_registered && !activate)
-		return 1;
-
-	add = activate != 0;
-
 	rawinput_registered = add;
-
-	// never unregister
-	if (!add)
-		return 1;
 
 	memset (rid, 0, sizeof rid);
 	num = 0;
@@ -517,6 +472,7 @@ static int doregister_rawinput (void)
 	}
 	num++;
 
+#if 0
 	for (int i = 0; i < num_joystick; i++) {
 		struct didata *did = &di_joystick[i];
 		if (did->connection != DIDC_RAW)
@@ -546,6 +502,7 @@ static int doregister_rawinput (void)
 			num++;
 		}
 	}
+#endif
 
 #if RAWINPUT_DEBUG
 	write_log (_T("RegisterRawInputDevices: ACT=%d NUM=%d HWND=%p\n"), activate, num, hMainWnd);
@@ -559,6 +516,14 @@ static int doregister_rawinput (void)
 	}
 
 	return 1;
+}
+
+void rawinput_alloc(void)
+{
+	doregister_rawinput(true);
+}
+void rawinput_release(void)
+{
 }
 
 static void cleardid (struct didata *did)
@@ -1137,13 +1102,13 @@ static void rawinputfixname (const TCHAR *name, const TCHAR *friendlyname)
 				p2++;
 			}
 			if (_tcslen (p2) >= _tcslen (tmp) && !_tcsncmp (p2, tmp, _tcslen (tmp))) {
+				write_log(_T("[%04X/%04X] '%s' (%s) -> '%s'\n"), did->vid, did->pid, did->configname, did->name, friendlyname);
 				xfree (did->name);
 //				if (did->vid > 0 && did->pid > 0)
 //					_stprintf (tmp, _T("%s [%04X/%04X]"), friendlyname, did->vid, did->pid);
 //				else
 				_stprintf (tmp, _T("%s"), friendlyname);
 				did->name = my_strdup (tmp);
-				write_log (_T("[%04X/%04X] '%s' -> '%s'\n"), did->vid, did->pid, did->configname, did->name);
 			}
 		}
 	}
@@ -1233,7 +1198,7 @@ static const TCHAR *rawkeyboardlabels[256] =
 	_T("VOLUMEDOWN"),NULL,_T("VOLUMEUP"),NULL,_T("WEBHOME"),_T("NUMPADCOMMA"),NULL,
 	_T("DIVIDE"),NULL,_T("SYSRQ"),_T("RMENU"),
 	NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
-	_T("PAUSE"),NULL,_T("HOME"),_T("UP"),_T("PRIOR"),NULL,_T("LEFT"),NULL,_T("RIGHT"),NULL,_T("END"),
+	_T("PAUSE"),NULL,_T("HOME"),_T("UP"),_T("PREV"),NULL,_T("LEFT"),NULL,_T("RIGHT"),NULL,_T("END"),
 	_T("DOWN"),_T("NEXT"),_T("INSERT"),_T("DELETE"),
 	NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 	_T("LWIN"),_T("RWIN"),_T("APPS"),_T("POWER"),_T("SLEEP"),
@@ -1488,11 +1453,10 @@ static void dumphidbuttoncaps (PHIDP_BUTTON_CAPS pcaps, int size)
 	}
 }
 
-static void dumphidcaps (struct didata *did, int cnt)
+static void dumphidcaps (struct didata *did)
 {
 	HIDP_CAPS caps = did->hidcaps;
 
-	write_log (_T("\n******** %d USB HID: '%s'\n"), cnt, did->name);
 	write_log (_T("Usage: %04x\n"), caps.Usage);
 	write_log (_T("UsagePage: %04x\n"), caps.UsagePage);
 	write_log (_T("InputReportByteLength: %u\n"), caps.InputReportByteLength);
@@ -1852,7 +1816,8 @@ static bool initialize_rawinput (void)
 					if (HidP_GetCaps (did->hidpreparseddata, &did->hidcaps) == HIDP_STATUS_SUCCESS) {
 						PHIDP_BUTTON_CAPS bcaps;
 						USHORT size = did->hidcaps.NumberInputButtonCaps;
-						dumphidcaps (did, rawcnt);
+						write_log(_T("RAWHID: %d/%d %d '%s' ('%s')\n"), rawcnt, gotnum, num_joystick - 1, did->name, did->configname);
+						dumphidcaps (did);
 						bcaps = xmalloc (HIDP_BUTTON_CAPS, size);
 						if (HidP_GetButtonCaps (HidP_Input, bcaps, &size, did->hidpreparseddata) == HIDP_STATUS_SUCCESS) {
 							dumphidbuttoncaps (bcaps, size);
@@ -1976,11 +1941,11 @@ static bool initialize_rawinput (void)
 		struct didata *did = di_keyboard + num_keyboard;
 		num_keyboard++;
 		rnum_kb++;
-		did->name = my_strdup (_T("WinUAE null keyboard"));
+		did->name = my_strdup (_T("WinUAE keyboard"));
 		did->rawinput = NULL;
 		did->connection = DIDC_RAW;
 		did->sortname = my_strdup (_T("NULLKEYBOARD"));
-		did->priority = -3;
+		did->priority = 2;
 		did->configname = my_strdup (_T("NULLKEYBOARD"));
 		addrkblabels (did);
 	}
@@ -1997,6 +1962,7 @@ static bool initialize_rawinput (void)
 	for (int i = 0; i < num_joystick; i++)
 		sortobjects (&di_joystick[i]);
 
+	rawinput_alloc();
 	return 1;
 
 error2:
@@ -2187,6 +2153,7 @@ static void handle_rawinput_2 (RAWINPUT *raw)
 					continue;
 				if (!did->acquired && did->rawinput == h) {
 					write_log(_T("RAWHID %d %p was unacquired!\n"), num, did->rawinput);
+					return;
 				}
 			}
 		}
@@ -2417,11 +2384,10 @@ static void handle_rawinput_2 (RAWINPUT *raw)
 			if (did->acquired) {
 				if (did->rawinput == h)
 					break;
-				if (h == NULL && num_keyboard == 1)
-					break;
 			}
 		}
 		if (num == num_keyboard) {
+			// find winuae keyboard
 			for (num = 0; num < num_keyboard; num++) {
 				did = &di_keyboard[num];
 				if (did->connection == DIDC_RAW && did->acquired && did->rawinput == NULL)
@@ -2435,7 +2401,7 @@ static void handle_rawinput_2 (RAWINPUT *raw)
 		}
 
 		// More complex press/release check because we want to support
-		// keys that never return releases, only pressed but also need
+		// keys that never return releases, only presses but also need
 		// handle normal keys that can repeat.
 
 #if 0
@@ -2444,7 +2410,7 @@ static void handle_rawinput_2 (RAWINPUT *raw)
 #endif
 
 		if (pressed) {
-			// previously pressed key and next press is same key? Repeat. Ignore it.
+			// previously pressed key and current press is same key? Repeat. Ignore it.
 			if (scancode == rawprevkey)
 				return;
 			rawprevkey = scancode;
@@ -2489,8 +2455,9 @@ static void handle_rawinput_2 (RAWINPUT *raw)
 			if (isfocus () < 2 && currprefs.input_tablet >= TABLET_MOUSEHACK && currprefs.input_magic_mouse) 
 				return;
 			di_keycodes[num][scancode] = pressed;
-			if (stopoutput == 0)
+			if (stopoutput == 0) {
 				my_kbd_handler (num, scancode, pressed);
+			}
 		}
 	}
 }
@@ -2987,12 +2954,8 @@ static int di_do_init (void)
 	}
 
 	if (!rawinput_decided) {
-		if (num_mouse > 0 && !test_rawinput (2))
-			num_mouse = 0;
-		if (num_keyboard > 0 && !test_rawinput (6))
-			num_keyboard = 0;
-		rawinput_enabled_keyboard = num_keyboard > 0;
-		rawinput_enabled_mouse = num_mouse > 0;
+		rawinput_enabled_keyboard = true;
+		rawinput_enabled_mouse = true;
 		rawinput_decided = true;
 	}
 	if (!rawhid_found) {
@@ -3041,6 +3004,16 @@ static int di_do_init (void)
 	sortdd (di_joystick, num_joystick, DID_JOYSTICK);
 	sortdd (di_mouse, num_mouse, DID_MOUSE);
 	sortdd (di_keyboard, num_keyboard, DID_KEYBOARD);
+
+	for (int i = 0; i < num_joystick; i++) {
+		write_log(_T("M %02d: '%s' (%s)\n"), i, di_mouse[i].name, di_mouse[i].configname);
+	}
+	for (int i = 0; i < num_joystick; i++) {
+		write_log(_T("J %02d: '%s' (%s)\n"), i, di_joystick[i].name, di_joystick[i].configname);
+	}
+	for (int i = 0; i < num_keyboard; i++) {
+		write_log(_T("K %02d: '%s' (%s)\n"), i, di_keyboard[i].name, di_keyboard[i].configname);
+	}
 
 	return 1;
 }
@@ -3178,7 +3151,6 @@ static int acquire_mouse (int num, int flags)
 	HRESULT hr;
 
 	if (num < 0) {
-		doregister_rawinput ();
 		return 1;
 	}
 
@@ -3223,7 +3195,6 @@ static int acquire_mouse (int num, int flags)
 static void unacquire_mouse (int num)
 {
 	if (num < 0) {
-		doregister_rawinput ();
 		return;
 	}
 
@@ -3506,7 +3477,7 @@ static void flushmsgpump (void)
 static int acquire_kb (int num, int flags)
 {
 	if (num < 0) {
-		doregister_rawinput ();
+		flushmsgpump();
 		if (currprefs.keyboard_leds_in_use) {
 			//write_log (_T("***********************acquire_kb_led\n"));
 			if (!currprefs.win32_kbledmode) {
@@ -3527,7 +3498,6 @@ static int acquire_kb (int num, int flags)
 				//write_log (_T("stored %08x -> %08x\n"), originalleds, newleds);
 			}
 			set_leds (newleds);
-			flushmsgpump ();
 		}
 		return 1;
 	}
@@ -3561,7 +3531,6 @@ static int acquire_kb (int num, int flags)
 static void unacquire_kb (int num)
 {
 	if (num < 0) {
-		doregister_rawinput ();
 		if (currprefs.keyboard_leds_in_use) {
 			//write_log (_T("*********************** unacquire_kb_led\n"));
 			if (originalleds != -1) {
@@ -4077,7 +4046,6 @@ void dinput_window (void)
 static int acquire_joystick (int num, int flags)
 {
 	if (num < 0) {
-		doregister_rawinput ();
 		return 1;
 	}
 
@@ -4115,7 +4083,6 @@ static int acquire_joystick (int num, int flags)
 static void unacquire_joystick (int num)
 {
 	if (num < 0) {
-		doregister_rawinput ();
 		return;
 	}
 
@@ -4153,12 +4120,20 @@ int dinput_wmkey (uae_u32 key)
 int input_get_default_keyboard (int i)
 {
 	if (rawinput_enabled_keyboard) {
-		return 1;
+		if (i < 0)
+			return 0;
+		if (i >= num_keyboard)
+			return 0;
+		struct didata *did = &di_keyboard[i];
+		if (did->connection == DIDC_RAW && !did->rawinput)
+			return 1;
 	} else {
+		if (i < 0)
+			return 0;
 		if (i == 0)
 			return 1;
-		return 0;
 	}
+	return 0;
 }
 
 static void setid (struct uae_input_device *uid, int i, int slot, int sub, int port, int evt, bool gp)

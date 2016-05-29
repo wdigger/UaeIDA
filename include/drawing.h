@@ -51,6 +51,7 @@ before it appears on-screen. (TW: display emulation now does this automatically)
 extern int lores_shift, interlace_seen;
 extern bool aga_mode, direct_rgb;
 extern int visible_left_border, visible_right_border;
+extern int detected_screen_resolution;
 
 STATIC_INLINE int coord_hw_to_window_x (int x)
 {
@@ -126,7 +127,7 @@ struct color_entry {
 #define CONVERT_RGB(c) 0
 #endif
 
-STATIC_INLINE xcolnr getxcolor (int c)
+STATIC_INLINE xcolnr getxcolor(int c)
 {
 #ifdef AGA
 	if (direct_rgb)

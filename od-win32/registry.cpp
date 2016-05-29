@@ -106,6 +106,7 @@ int regsetlonglong (UAEREG *root, const TCHAR *name, ULONGLONG val)
 
 int regquerylonglong (UAEREG *root, const TCHAR *name, ULONGLONG *val)
 {
+	*val = 0;
 	if (inimode) {
 		int ret = 0;
 		TCHAR tmp[100];
@@ -124,7 +125,6 @@ int regquerylonglong (UAEREG *root, const TCHAR *name, ULONGLONG *val)
 		return RegQueryValueEx (rk, name, 0, &dwType, (LPBYTE)val, &size) == ERROR_SUCCESS;
 	}
 }
-
 
 int regquerystr (UAEREG *root, const TCHAR *name, TCHAR *str, int *size)
 {

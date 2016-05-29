@@ -42,3 +42,5 @@ decompress
 *.iobj
 *.ipdb
 *.opendb
+packages
+packages.config

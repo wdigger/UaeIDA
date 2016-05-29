@@ -115,9 +115,19 @@ void uae_sem_post (uae_sem_t * event)
 	SetEvent (*event);
 }
 
+int uae_sem_trywait_delay(uae_sem_t * event, int millis)
+{
+	int v = WaitForSingleObject(*event, millis);
+	if (v == WAIT_OBJECT_0)
+		return 0;
+	if (v == WAIT_ABANDONED)
+		return -2;
+	return -1;
+}
+
 int uae_sem_trywait (uae_sem_t * event)
 {
-	return WaitForSingleObject (*event, 0) == WAIT_OBJECT_0 ? 0 : -1;
+	return uae_sem_trywait_delay(event, 0);
 }
 
 void uae_sem_destroy (uae_sem_t * event)
@@ -243,4 +253,29 @@ void uae_set_thread_priority (uae_thread_id *tid, int pri)
 	}
 }
 
+void atomic_and(volatile uae_atomic *p, uae_u32 v)
+{
+	_InterlockedAnd(p, v);
+}
+void atomic_or(volatile uae_atomic *p, uae_u32 v)
+{
+	_InterlockedOr(p, v);
+}
+void atomic_set(volatile uae_atomic *p, uae_u32 v)
+{
+}
+uae_atomic atomic_inc(volatile uae_atomic *p)
+{
+	return _InterlockedIncrement(p);
+}
+uae_atomic atomic_dec(volatile uae_atomic *p)
+{
+	return _InterlockedDecrement(p);
+}
+
+uae_u32 atomic_bit_test_and_reset(volatile uae_atomic *p, uae_u32 v)
+{
+	return _interlockedbittestandreset(p, v);
+}
 #endif
+

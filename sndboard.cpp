@@ -269,9 +269,9 @@ static void codec_stop(void)
 void sndboard_rethink(void)
 {
 	struct toccata_data *data = &toccata;
-	uae_int_requested &= ~0x200;
+	atomic_and(&uae_int_requested, ~0x200);
 	if (data->toccata_irq)
-		uae_int_requested |= 0x200;
+		atomic_or(&uae_int_requested, 0x200);
 }
 
 static void sndboard_process_capture(void)
@@ -638,7 +638,7 @@ void sndboard_free(void)
 {
 	struct toccata_data *data = &toccata;
 	data->toccata_irq = 0;
-	uae_int_requested &= ~0x200;
+	atomic_and(&uae_int_requested, ~0x200);
 }
 
 void sndboard_reset(void)
@@ -1136,7 +1136,9 @@ SWVoiceOut *AUD_open_out(
 	out->fmt = settings->fmt;
 	out->bytesperframe = out->ch * bits / 8;
 
-	write_log(_T("QEMU AUDIO: freq=%d ch=%d bits=%d (fmt=%d) '%s'\n"), out->freq, out->ch, bits, settings->fmt, name);
+	TCHAR *name2 = au(name);
+	write_log(_T("QEMU AUDIO: freq=%d ch=%d bits=%d (fmt=%d) '%s'\n"), out->freq, out->ch, bits, settings->fmt, name2);
+	xfree(name2);
 
 	qemu_voice_out = out;
 

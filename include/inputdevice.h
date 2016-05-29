@@ -71,10 +71,12 @@ struct uae_input_device_kbr_default {
 struct inputevent {
 	const TCHAR *confname;
 	const TCHAR *name;
+	const TCHAR *shortname;
 	int allow_mask;
 	int type;
 	int unit;
 	int data;
+	int portid;
 };
 
 #define MAX_INPUT_QUALIFIERS (8 + 5)
@@ -175,8 +177,9 @@ extern int inputdevice_iterate (int devnum, int num, TCHAR *name, int *af);
 extern bool inputdevice_set_gameports_mapping (struct uae_prefs *prefs, int devnum, int num, int evtnum, uae_u64 flags, int port, int input_selected_setting);
 extern int inputdevice_set_mapping (int devnum, int num, const TCHAR *name, TCHAR *custom, uae_u64 flags, int port, int sub);
 extern int inputdevice_get_mapping (int devnum, int num, uae_u64 *pflags, int *port, TCHAR *name, TCHAR *custom, int sub);
-extern void inputdevice_copyconfig (const struct uae_prefs *src, struct uae_prefs *dst);
+extern void inputdevice_copyconfig (struct uae_prefs *src, struct uae_prefs *dst);
 extern void inputdevice_copy_single_config (struct uae_prefs *p, int src, int dst, int devnum, int selectedwidget);
+extern void inputdevice_copyjports(struct uae_prefs *srcprefs, struct uae_prefs *dstprefs);
 extern void inputdevice_swap_ports (struct uae_prefs *p, int devnum);
 extern void inputdevice_swap_compa_ports (struct uae_prefs *p, int portswap);
 extern void inputdevice_config_change (void);
@@ -198,12 +201,14 @@ extern int input_get_default_joystick_analog (struct uae_input_device *uid, int 
 extern int input_get_default_keyboard (int num);
 
 #define DEFEVENT(A, B, C, D, E, F) INPUTEVENT_ ## A,
+#define DEFEVENT2(A, B, B2, C, D, E, F, G) INPUTEVENT_ ## A,
 enum inputevents {
 INPUTEVENT_ZERO,
 #include "../inputevents.def"
 INPUTEVENT_END
 };
 #undef DEFEVENT
+#undef DEFEVENT2
 
 extern void handle_cd32_joystick_cia (uae_u8, uae_u8);
 extern uae_u8 handle_parport_joystick (int port, uae_u8 pra, uae_u8 dra);
@@ -216,7 +221,7 @@ extern uae_u8 handle_joystick_buttons (uae_u8, uae_u8);
 extern int magicmouse_alive (void);
 extern int is_tablet (void);
 extern int inputdevice_is_tablet (void);
-extern int input_mousehack_status (int mode, uaecptr diminfo, uaecptr dispinfo, uaecptr vp, uae_u32 moffset);
+extern int input_mousehack_status(TrapContext *ctx, int mode, uaecptr diminfo, uaecptr dispinfo, uaecptr vp, uae_u32 moffset);
 extern void input_mousehack_mouseoffset (uaecptr pointerprefs);
 extern int mousehack_alive (void);
 extern void mousehack_wakeup(void);
@@ -232,8 +237,8 @@ extern void setjoystickstate (int joy, int axle, int state, int max);
 extern int getjoystickstate (int mouse);
 void setmousestate (int mouse, int axis, int data, int isabs);
 extern int getmousestate (int mouse);
-extern void inputdevice_updateconfig (const struct uae_prefs *srcprefs, struct uae_prefs *dstprefs);
-extern void inputdevice_updateconfig_internal (const struct uae_prefs *srcprefs, struct uae_prefs *dstprefs);
+extern void inputdevice_updateconfig (struct uae_prefs *srcprefs, struct uae_prefs *dstprefs);
+extern void inputdevice_updateconfig_internal (struct uae_prefs *srcprefs, struct uae_prefs *dstprefs);
 extern void inputdevice_devicechange (struct uae_prefs *prefs);
 
 #define INTERNALEVENT_CPURESET 0
@@ -249,12 +254,15 @@ extern int inputdevice_iskeymapped (int keyboard, int scancode);
 extern int inputdevice_synccapslock (int, int*);
 extern void inputdevice_testrecord (int type, int num, int wtype, int wnum, int state, int max);
 extern int inputdevice_get_compatibility_input (struct uae_prefs*, int index, int *typelist, int *inputlist, const int **at);
-extern struct inputevent *inputdevice_get_eventinfo (int evt);
+extern const struct inputevent *inputdevice_get_eventinfo (int evt);
 extern bool inputdevice_get_eventname (const struct inputevent *ie, TCHAR *out);
 extern void inputdevice_compa_prepare_custom (struct uae_prefs *prefs, int index, int mode, bool removeold);
 extern void inputdevice_compa_clear (struct uae_prefs *prefs, int index);
 extern int intputdevice_compa_get_eventtype (int evt, const int **axistable);
 extern void inputdevice_sparecopy (struct uae_input_device *uid, int num, int sub);
+extern void inputdevice_parse_jport_custom(struct uae_prefs *pr, int index, int port, TCHAR *outname);
+extern void inputdevice_generate_jport_custom(struct uae_prefs *pr, int port);
+extern void inputdevice_forget_unplugged_device(int portnum);
 
 extern uae_u16 potgo_value;
 extern uae_u16 POTGOR (void);
@@ -273,12 +281,13 @@ extern void inputdevice_reset (void);
 
 extern void write_inputdevice_config (struct uae_prefs *p, struct zfile *f);
 extern void read_inputdevice_config (struct uae_prefs *p, const TCHAR *option, TCHAR *value);
-extern void reset_inputdevice_config (struct uae_prefs *pr);
-extern void store_inputdevice_config (struct uae_prefs *pr);
-extern void restore_inputdevice_config (struct uae_prefs *p, int portnum);
-extern int inputdevice_joyport_config (struct uae_prefs *p, const TCHAR *value, int portnum, int mode, int type, bool validate);
+extern void reset_inputdevice_config (struct uae_prefs *pr, bool reset);
+extern int inputdevice_joyport_config(struct uae_prefs *p, const TCHAR *value1, const TCHAR *value2, int portnum, int mode, int type, bool candefault);
+extern void inputdevice_joyport_config_store(struct uae_prefs *p, const TCHAR *value, int portnum, int mode, int type);
 extern int inputdevice_getjoyportdevice (int port, int val);
-extern void inputdevice_validate_jports (struct uae_prefs *p, int changedport);
+extern void inputdevice_validate_jports (struct uae_prefs *p, int changedport, bool *fixedports);
+extern void inputdevice_fix_prefs(struct uae_prefs *p, bool userconfig);
+extern void inputdevice_config_load_start(struct uae_prefs *p);
 
 extern void inputdevice_init (void);
 extern void inputdevice_close (void);
@@ -317,18 +326,17 @@ extern void setsystime (void);
 #define JSEM_MODE_LIGHTPEN 8
 
 #define JSEM_KBDLAYOUT 0
+#define JSEM_CUSTOM 10
 #define JSEM_JOYS 100
 #define JSEM_MICE 200
 #define JSEM_END 300
-#define JSEM_XARCADE1LAYOUT (JSEM_KBDLAYOUT + 3)
-#define JSEM_XARCADE2LAYOUT (JSEM_KBDLAYOUT + 4)
 #define JSEM_DECODEVAL(port,p) ((p)->jports[port].id)
 #define JSEM_ISNUMPAD(port,p) (jsem_iskbdjoy(port,p) == JSEM_KBDLAYOUT)
 #define JSEM_ISCURSOR(port,p) (jsem_iskbdjoy(port,p) == JSEM_KBDLAYOUT + 1)
 #define JSEM_ISSOMEWHEREELSE(port,p) (jsem_iskbdjoy(port,p) == JSEM_KBDLAYOUT + 2)
-#define JSEM_ISXARCADE1(port,p) (jsem_iskbdjoy(port,p) == JSEM_XARCADE1LAYOUT)
-#define JSEM_ISXARCADE2(port,p) (jsem_iskbdjoy(port,p) == JSEM_XARCADE2LAYOUT)
-#define JSEM_LASTKBD 5
+#define JSEM_ISCUSTOM(port,p) ((p)->jports[port].id >= JSEM_CUSTOM && (p)->jports[port].id < JSEM_CUSTOM + MAX_JPORTS_CUSTOM)
+#define JSEM_GETCUSTOMIDX(port,p) ((p)->jports[port].id - JSEM_CUSTOM)
+#define JSEM_LASTKBD 3
 #define JSEM_ISANYKBD(port,p) (jsem_iskbdjoy(port,p) >= JSEM_KBDLAYOUT && jsem_iskbdjoy(port,p) < JSEM_KBDLAYOUT + JSEM_LASTKBD)
 
 extern int jsem_isjoy (int port, const struct uae_prefs *p);

@@ -65,9 +65,6 @@
     <Filter Include="support">
       <UniqueIdentifier>{fe9d96c8-c5ef-4f92-b9dc-79b5d3e4145c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="uaeida">
-      <UniqueIdentifier>{ae2b4111-0978-4a8a-8bb7-ae13fb2a6ec6}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ahidsound_dsonly.cpp">
@@ -823,15 +820,6 @@
     <ClCompile Include="..\..\support\time.cpp">
       <Filter>support</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\uaeida\ida_debug.cpp">
-      <Filter>uaeida</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\uaeida\ida_plugin.cpp">
-      <Filter>uaeida</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\uaeida\ida_fd.cpp">
-      <Filter>uaeida</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\resources\35floppy.ico">
@@ -932,7 +920,6 @@
     <None Include="..\resources\drive_spin.wav" />
     <None Include="..\resources\drive_spinnd.wav" />
     <None Include="..\resources\drive_startup.wav" />
-    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\resources\winuae.rc">
@@ -949,14 +936,5 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\resources\resource.h" />
-    <ClInclude Include="..\..\uaeida\ida_debmod.h">
-      <Filter>uaeida</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\uaeida\ida_plugin.h">
-      <Filter>uaeida</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\uaeida\ida_fd.h">
-      <Filter>uaeida</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

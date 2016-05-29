@@ -96,7 +96,9 @@ static int res_shift;
 
 static int linedbl, linedbld;
 
-int interlace_seen = 0;
+int interlace_seen;
+int detected_screen_resolution;
+
 #define AUTO_LORES_FRAMES 10
 static int can_use_lores = 0, frame_res, frame_res_lace;
 static int resolution_count[RES_MAX + 1], lines_count;
@@ -152,6 +154,10 @@ int xgreencolor_s, xgreencolor_b, xgreencolor_m;
 int xbluecolor_s, xbluecolor_b, xbluecolor_m;
 
 struct color_entry colors_for_drawing;
+static struct color_entry direct_colors_for_drawing;
+
+static xcolnr *p_acolors;
+static xcolnr *p_xcolors;
 
 /* The size of these arrays is pretty arbitrary; it was chosen to be "more
 than enough".  The coordinates used for indexing into these arrays are
@@ -192,6 +198,7 @@ static uae_u8 *row_map_genlock_buffer;
 static uae_u8 row_tmp[MAX_PIXELS_PER_LINE * 32 / 8];
 static int max_drawn_amiga_line;
 uae_u8 **row_map_genlock;
+uae_u8 *row_map_color_burst_buffer;
 
 /* line_draw_funcs: pfield_do_linetoscr, pfield_do_fill_line, decode_ham */
 typedef void (*line_draw_func)(int, int, bool);
@@ -242,9 +249,10 @@ static int first_block_line, last_block_line;
 each line that needs to be drawn.  These are basically extracted out of
 bit fields in the hardware registers.  */
 static int bplehb, bplham, bpldualpf, bpldualpfpri, bpldualpf2of, bplplanecnt, ecsshres;
+static int bplbypass, bplcolorburst, bplcolorburst_field;
 static bool issprites;
 static int bplres;
-static int plf1pri, plf2pri, bplxor, bpldelay_sh;
+static int plf1pri, plf2pri, bplxor, bpland, bpldelay_sh;
 static uae_u32 plf_sprite_mask;
 static int sbasecol[2] = { 16, 16 };
 static int hposblank;
@@ -253,8 +261,7 @@ static bool ecs_genlock_features_active;
 static uae_u8 ecs_genlock_features_mask;
 static bool ecs_genlock_features_colorkey;
 
-bool picasso_requested_on;
-bool picasso_on;
+bool picasso_requested_on, picasso_requested_forced_on, picasso_on;
 
 uae_sem_t gui_sem;
 int inhibit_frame;
@@ -1709,6 +1716,12 @@ static int pfield_do_linetoscr_sprite_shdelay(int spix, int dpix, int dpix_end)
 static void pfield_set_linetoscr (void)
 {
 	xlinecheck(start, stop);
+	p_acolors = colors_for_drawing.acolors;
+	p_xcolors = xcolors;
+	bpland = 0xff;
+	if (bplbypass) {
+		p_acolors = direct_colors_for_drawing.acolors;
+	}
 	spritepixels = spritepixels_buffer;
 	pfield_do_linetoscr_spriteonly = pfield_do_nothing;
 #ifdef AGA
@@ -1730,7 +1743,7 @@ static void pfield_set_linetoscr (void)
 			switch (gfxvidinfo.drawbuffer.pixbytes) {
 				case 2:
 				pfield_do_linetoscr_normal = need_genlock_data ? linetoscr_16_stretch2_aga_genlock : linetoscr_16_stretch2_aga;
-				pfield_do_linetoscr_sprite = need_genlock_data ? linetoscr_16_stretch2_aga_spr_genlock : linetoscr_16_stretch2_aga_spr_genlock;
+				pfield_do_linetoscr_sprite = need_genlock_data ? linetoscr_16_stretch2_aga_spr_genlock : linetoscr_16_stretch2_aga_spr;
 				pfield_do_linetoscr_spriteonly = linetoscr_16_stretch2_aga_spronly;
 				break;
 				case 4:
@@ -1999,12 +2012,13 @@ static void init_ham_decoding (void)
 		} else { /* AGA mode HAM6 */
 			while (unpainted_amiga-- > 0) {
 				int pv = pixdata.apixels[ham_decode_pixel++] ^ bplxor;
+				uae_u32 pc = ((pv & 0xf) << 0) | ((pv & 0xf) << 4);
 				switch (pv & 0x30)
 				{
 				case 0x00: ham_lastcolor = colors_for_drawing.color_regs_aga[pv] & 0xffffff; break;
-				case 0x10: ham_lastcolor &= 0xFFFF00; ham_lastcolor |= (pv & 0xF) << 4; break;
-				case 0x20: ham_lastcolor &= 0x00FFFF; ham_lastcolor |= (pv & 0xF) << 20; break;
-				case 0x30: ham_lastcolor &= 0xFF00FF; ham_lastcolor |= (pv & 0xF) << 12; break;
+				case 0x10: ham_lastcolor &= 0xFFFF00; ham_lastcolor |= pc << 0; break;
+				case 0x20: ham_lastcolor &= 0x00FFFF; ham_lastcolor |= pc << 16; break;
+				case 0x30: ham_lastcolor &= 0xFF00FF; ham_lastcolor |= pc << 8; break;
 				}
 			}
 		}
@@ -2027,6 +2041,7 @@ static void init_ham_decoding (void)
 static void decode_ham (int pix, int stoppos, bool blank)
 {
 	int todraw_amiga = res_shift_from_window (stoppos - pix);
+	int hdp = ham_decode_pixel;
 
 	if (!bplham) {
 		while (todraw_amiga-- > 0) {
@@ -2057,12 +2072,13 @@ static void decode_ham (int pix, int stoppos, bool blank)
 		} else { /* AGA mode HAM6 */
 			while (todraw_amiga-- > 0) {
 				int pv = pixdata.apixels[ham_decode_pixel] ^ bplxor;
+				uae_u32 pc = ((pv & 0xf) << 0) | ((pv & 0xf) << 4);
 				switch (pv & 0x30)
 				{
 				case 0x00: ham_lastcolor = colors_for_drawing.color_regs_aga[pv] & 0xffffff; break;
-				case 0x10: ham_lastcolor &= 0xFFFF00; ham_lastcolor |= (pv & 0xF) << 4; break;
-				case 0x20: ham_lastcolor &= 0x00FFFF; ham_lastcolor |= (pv & 0xF) << 20; break;
-				case 0x30: ham_lastcolor &= 0xFF00FF; ham_lastcolor |= (pv & 0xF) << 12; break;
+				case 0x10: ham_lastcolor &= 0xFFFF00; ham_lastcolor |= pc << 0; break;
+				case 0x20: ham_lastcolor &= 0x00FFFF; ham_lastcolor |= pc << 16; break;
+				case 0x30: ham_lastcolor &= 0xFF00FF; ham_lastcolor |= pc << 8; break;
 				}
 				ham_linebuf[ham_decode_pixel++] = ham_lastcolor;
 			}
@@ -2413,6 +2429,11 @@ void init_row_map (void)
 	if (init_genlock_data) {
 		row_map_genlock_buffer = xcalloc(uae_u8, gfxvidinfo.drawbuffer.width_allocated * (gfxvidinfo.drawbuffer.height_allocated + 2));
 	}
+	xfree(row_map_color_burst_buffer);
+	row_map_color_burst_buffer = NULL;
+	if (currprefs.cs_color_burst) {
+		row_map_color_burst_buffer = xcalloc(uae_u8, gfxvidinfo.drawbuffer.height_allocated + 2);
+	}
 	j = oldheight == 0 ? max_uae_height : oldheight;
 	for (i = gfxvidinfo.drawbuffer.height_allocated; i < max_uae_height + 1 && i < j + 1; i++) {
 		row_map[i] = row_tmp;
@@ -2565,6 +2586,9 @@ static void pfield_expand_dp_bplcon (void)
 	if ((currprefs.chipset_mask & CSMASK_ECS_DENISE) && (dp_for_drawing->bplcon2 & 0x0200))
 		bplehb = 0;
 	issprites = dip_for_drawing->nr_sprites > 0;
+	bplcolorburst = (dp_for_drawing->bplcon0 & 0x200) != 0;
+	if (!bplcolorburst)
+		bplcolorburst_field = 0;
 #ifdef ECS_DENISE
 	int oecsshres = ecsshres;
 	ecsshres = bplres == RES_SUPERHIRES && (currprefs.chipset_mask & CSMASK_ECS_DENISE) && !(currprefs.chipset_mask & CSMASK_AGA);
@@ -2579,6 +2603,22 @@ static void pfield_expand_dp_bplcon (void)
 	bpldualpfpri = (dp_for_drawing->bplcon2 & 0x40) == 0x40;
 
 #ifdef AGA
+	// BYPASS: HAM and EHB select bits are ignored
+	if (bplbypass != (dp_for_drawing->bplcon0 & 0x20) != 0) {
+		bpland = 0xff;
+		bplbypass = (dp_for_drawing->bplcon0 & 0x20) != 0;
+		pfield_mode_changed = true;
+	}
+	if (bplbypass) {
+		if (bplham && bplplanecnt == 6)
+			bpland = 0x0f;
+		if (bplham && bplplanecnt == 8)
+			bpland = 0xfc;
+		bplham = 0;
+		if (bplehb)
+			bpland = 31;
+		bplehb = 0;
+	}
 	bpldualpf2of = (dp_for_drawing->bplcon3 >> 10) & 7;
 	sbasecol[0] = ((dp_for_drawing->bplcon4 >> 4) & 15) << 4;
 	sbasecol[1] = ((dp_for_drawing->bplcon4 >> 0) & 15) << 4;
@@ -2874,6 +2914,9 @@ static void pfield_draw_line (struct vidbuffer *vb, int lineno, int gfx_ypos, in
 	xlinebuffer -= linetoscr_x_adjust_pixbytes;
 	xlinebuffer_genlock = row_map_genlock[gfx_ypos] - linetoscr_x_adjust_pixels;
 
+	if (row_map_color_burst_buffer)
+		row_map_color_burst_buffer[gfx_ypos] = bplcolorburst;
+
 	if (border == 0) {
 
 		pfield_expand_dp_bplcon ();
@@ -3128,18 +3171,22 @@ static void init_drawing_frame (void)
 	int i, maxline;
 	static int frame_res_old;
 
-	if (currprefs.gfx_resolution == changed_prefs.gfx_resolution && lines_count > 0) {
-		int largest_count = 0;
-		int largest_count_res = 0;
-		int largest_res = 0;
-		for (int i = 0; i <= RES_MAX; i++) {
-			if (resolution_count[i])
-				largest_res = i;
-			if (resolution_count[i] >= largest_count) {
-				largest_count = resolution_count[i];
-				largest_count_res = i;
-			}
+	int largest_res = 0;
+	int largest_count = 0;
+	int largest_count_res = 0;
+	for (int i = 0; i <= RES_MAX; i++) {
+		if (resolution_count[i])
+			largest_res = i;
+		if (resolution_count[i] >= largest_count) {
+			largest_count = resolution_count[i];
+			largest_count_res = i;
 		}
+	}
+	if (currprefs.gfx_resolution == changed_prefs.gfx_resolution && lines_count > 0) {
+		detected_screen_resolution = largest_res;
+	}
+
+	if (currprefs.gfx_resolution == changed_prefs.gfx_resolution && lines_count > 0) {
 
 		if (currprefs.gfx_autoresolution_vga && programmedmode && gfxvidinfo.gfx_resolution_reserved >= RES_HIRES && gfxvidinfo.gfx_vresolution_reserved >= VRES_DOUBLE) {
 			if (largest_res == RES_SUPERHIRES && (gfxvidinfo.gfx_resolution_reserved < RES_SUPERHIRES || gfxvidinfo.gfx_vresolution_reserved < 1)) {
@@ -3389,7 +3436,7 @@ static void draw_debug_status_line (int line)
 	if (xlinebuffer == 0)
 		xlinebuffer = row_map[line];
 	xlinebuffer_genlock = row_map_genlock[line];
-	debug_draw_cycles(xlinebuffer, gfxvidinfo.drawbuffer.pixbytes, line, gfxvidinfo.drawbuffer.outwidth, gfxvidinfo.drawbuffer.outheight, xredcolors, xgreencolors, xbluecolors);
+	debug_draw(xlinebuffer, gfxvidinfo.drawbuffer.pixbytes, line, gfxvidinfo.drawbuffer.outwidth, gfxvidinfo.drawbuffer.outheight, xredcolors, xgreencolors, xbluecolors);
 }
 
 #define LIGHTPEN_HEIGHT 12
@@ -3667,7 +3714,7 @@ static void finish_drawing_frame (void)
 			do_flush_line (vb, line);
 		}
 	}
-	if (debug_dma > 1) {
+	if (debug_dma > 1 || debug_heatmap > 1) {
 		for (i = 0; i < vb->outheight; i++) {
 			int line = i;
 			draw_debug_status_line (line);
@@ -3710,8 +3757,18 @@ static void finish_drawing_frame (void)
 		}
 	}
 
-	if (currprefs.genlock_image && !currprefs.monitoremu && gfxvidinfo.tempbuffer.bufmem_allocated && currprefs.genlock) {
-		pfield_set_linetoscr();
+	if (!currprefs.monitoremu && gfxvidinfo.tempbuffer.bufmem_allocated && ((!bplcolorburst_field && currprefs.cs_color_burst) || (currprefs.gfx_grayscale))) {
+		setspecialmonitorpos(&gfxvidinfo.tempbuffer);
+		emulate_grayscale(vb, &gfxvidinfo.tempbuffer);
+		vb = gfxvidinfo.outbuffer = &gfxvidinfo.tempbuffer;
+		if (vb->nativepositioning)
+			setnativeposition(vb);
+		gfxvidinfo.drawbuffer.tempbufferinuse = true;
+		do_flush_screen(vb, 0, vb->outheight);
+		didflush = true;
+	}
+
+	if (currprefs.genlock_image && !currprefs.monitoremu && !currprefs.cs_color_burst && gfxvidinfo.tempbuffer.bufmem_allocated && currprefs.genlock) {
 		setspecialmonitorpos(&gfxvidinfo.tempbuffer);
 		if (init_genlock_data != specialmonitor_need_genlock()) {
 			need_genlock_data = init_genlock_data = specialmonitor_need_genlock();
@@ -3766,9 +3823,10 @@ static void check_picasso (void)
 		picasso_refresh ();
 	picasso_redraw_necessary = 0;
 
-	if (picasso_requested_on == picasso_on)
+	if (picasso_requested_on == picasso_on && !picasso_requested_forced_on)
 		return;
 
+	picasso_requested_forced_on = false;
 	picasso_on = picasso_requested_on;
 
 	if (!picasso_on)
@@ -4065,13 +4123,27 @@ void reset_drawing (void)
 
 	center_reset = true;
 	specialmonitoron = false;
+	bplcolorburst_field = 1;
+}
+
+static void gen_direct_drawing_table(void)
+{
+#ifdef AGA
+	// BYPASS color table
+	for (int i = 0; i < 256; i++) {
+		uae_u32 v = (i << 16) | (i << 8) | i;
+		direct_colors_for_drawing.acolors[i] = CONVERT_RGB(v);
+	}
+#endif
 }
 
 void drawing_init (void)
 {
 	refresh_indicator_init();
 
-	gen_pfield_tables ();
+	gen_pfield_tables();
+
+	gen_direct_drawing_table();
 
 	uae_sem_init (&gui_sem, 0, 1);
 #ifdef PICASSO96
@@ -4092,7 +4164,7 @@ void drawing_init (void)
 
 int isvsync_chipset (void)
 {
-	if (picasso_on || !currprefs.gfx_apmode[0].gfx_vsync || (currprefs.gfx_apmode[0].gfx_vsync == 0 && !currprefs.gfx_apmode[0].gfx_fullscreen))
+	if (picasso_on || currprefs.gfx_apmode[0].gfx_vsync <= 0 || (currprefs.gfx_apmode[0].gfx_vsync <= 0 && !currprefs.gfx_apmode[0].gfx_fullscreen))
 		return 0;
 	if (currprefs.gfx_apmode[0].gfx_vsyncmode == 0)
 		return 1;
@@ -4103,7 +4175,7 @@ int isvsync_chipset (void)
 
 int isvsync_rtg (void)
 {
-	if (!picasso_on || !currprefs.gfx_apmode[1].gfx_vsync || (currprefs.gfx_apmode[1].gfx_vsync == 0 && !currprefs.gfx_apmode[1].gfx_fullscreen))
+	if (!picasso_on || currprefs.gfx_apmode[1].gfx_vsync <= 0 || (currprefs.gfx_apmode[1].gfx_vsync <= 0 && !currprefs.gfx_apmode[1].gfx_fullscreen))
 		return 0;
 	if (currprefs.gfx_apmode[1].gfx_vsyncmode == 0)
 		return 1;

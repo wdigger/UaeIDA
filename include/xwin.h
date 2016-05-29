@@ -17,8 +17,6 @@ typedef uae_u32 xcolnr;
 typedef int (*allocfunc_type)(int, int, int, xcolnr *);
 
 extern xcolnr xcolors[4096];
-extern xcolnr xcolors_16[4096];
-extern xcolnr xcolors_32[4096];
 extern uae_u32 p96_rgbx16[65536];
 
 extern int graphics_setup (void);
@@ -60,6 +58,7 @@ extern bool show_screen_maybe (bool);
 extern int lockscr (struct vidbuffer*, bool);
 extern void unlockscr (struct vidbuffer*);
 extern bool target_graphics_buffer_update (void);
+extern double target_adjust_vblank_hz(double);
 
 void getgfxoffset (float *dxp, float *dyp, float *mxp, float *myp);
 double getcurrentvblankrate (void); /* todo: remove from od-win32/win32gfx.h */

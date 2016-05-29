@@ -38,6 +38,7 @@
 #include "savestate.h"
 #include "ar.h"
 #include "debug.h"
+#include "akiko.h"
 #if defined(ENFORCER)
 #include "enforcer.h"
 #endif
@@ -139,6 +140,7 @@ static bool genlockhtoggle;
 static bool genlockvtoggle;
 static bool graphicsbuffer_retry;
 static int scanlinecount;
+static int cia_hsync;
 
 #define LOF_TOGGLES_NEEDED 3
 //#define NLACE_CNT_NEEDED 50
@@ -518,8 +520,12 @@ void alloc_cycle_blitter (int hpos, uaecptr *ptr, int chnum)
 			warned--;
 			//activate_debugger ();
 		}
-		if ((currprefs.cs_hacks & 1) && currprefs.cpu_model == 68000)
+		if ((currprefs.cs_hacks & 1) && currprefs.cpu_model == 68000) {
+		//if (currprefs.cpu_model == 68000 && currprefs.cpu_cycle_exact && currprefs.blitter_cycle_exact) {
+			// batman group / batman vuelve triggers this incorrectly. More testing needed.
 			*ptr = srcptr;
+			//activate_debugger();
+		}
 	}
 	alloc_cycle (hpos, CYCLE_BLITTER);
 }
@@ -1741,6 +1747,7 @@ static void hack_shres_delay(int hpos)
 		current_colors.extra &= ~(1 << (CE_SHRES_DELAY + 1));
 		current_colors.extra |= toscr_delay_sh[0] << CE_SHRES_DELAY;
 		remembered_color_entry = -1;
+		thisline_changed = true;
 	}
 }
 
@@ -2185,7 +2192,7 @@ static void maybe_finish_last_fetch (int pos, int fm)
 	static int warned = 20;
 	bool done = false;
 
-	if (plf_state != plf_passed_stop2 || (fetch_state != fetch_started && fetch_state != fetch_started_first) || !dmaen (DMA_BITPLANE)) {
+	if (plf_state != plf_passed_stop2 || (fetch_state != fetch_started && fetch_state != fetch_started_first) || aga_plf_passed_stop2 || !dmaen (DMA_BITPLANE)) {
 		finish_last_fetch (pos, fm, true);
 		return;
 	}
@@ -3746,7 +3753,7 @@ static void reset_decisions (void)
 	}
 
 	memset (outword, 0, sizeof outword);
-	// fetched must not be cleared (Sony VX-90 / Royal Amiga Force)
+	// fetched[] must not be cleared (Sony VX-90 / Royal Amiga Force)
 	todisplay_fetched[0] = todisplay_fetched[1] = false;
 	memset (todisplay, 0, sizeof todisplay);
 	memset (todisplay2, 0, sizeof todisplay2);
@@ -3927,6 +3934,7 @@ struct chipset_refresh *get_chipset_refresh (void)
 			(cr->vert < 0 || cr->vert == maxvpos_display) &&
 			(cr->ntsc < 0 || (cr->ntsc > 0 && isntsc) || (cr->ntsc == 0 && !isntsc)) &&
 			(cr->lace < 0 || (cr->lace > 0 && islace) || (cr->lace == 0 && !islace)) &&
+			(cr->resolution == 0 || cr->resolution == 7 || (cr->resolution & (1 << detected_screen_resolution))) &&
 			(cr->framelength < 0 || (cr->framelength > 0 && lof_store) || (cr->framelength == 0 && !lof_store) || (cr->framelength >= 0 && islace)) &&
 			((cr->rtg && picasso_on) || (!cr->rtg && !picasso_on)) &&
 			(cr->vsync < 0 || (cr->vsync > 0 && isvsync_chipset ()) || (cr->vsync == 0 && !isvsync_chipset ())))
@@ -3953,6 +3961,8 @@ void compute_framesync (void)
 	} else {
 		vblank_hz = vblank_hz_shf;
 	}
+
+	vblank_hz = target_adjust_vblank_hz(vblank_hz);
 
 	struct chipset_refresh *cr = get_chipset_refresh ();
 	while (cr) {
@@ -4058,6 +4068,15 @@ void compute_framesync (void)
 		gfxvidinfo.drawbuffer.inheight2 = gfxvidinfo.drawbuffer.inheight;
 
 	}
+
+	if (gfxvidinfo.drawbuffer.inwidth < 16)
+		gfxvidinfo.drawbuffer.inwidth = 16;
+	if (gfxvidinfo.drawbuffer.inwidth2 < 16)
+		gfxvidinfo.drawbuffer.inwidth2 = 16;
+	if (gfxvidinfo.drawbuffer.inheight < 1)
+		gfxvidinfo.drawbuffer.inheight = 1;
+	if (gfxvidinfo.drawbuffer.inheight2 < 1)
+		gfxvidinfo.drawbuffer.inheight2 = 1;
 
 	if (gfxvidinfo.drawbuffer.inwidth > gfxvidinfo.drawbuffer.width_allocated)
 		gfxvidinfo.drawbuffer.inwidth = gfxvidinfo.drawbuffer.width_allocated;
@@ -4281,9 +4300,15 @@ static void init_hz (bool checkvposw)
 
 		if (hsyncendpos < 2)
 			hsyncendpos = 2;
+
+		if (hsyncstartpos - hsyncendpos < maxhpos / 2)
+			hsyncstartpos = maxhpos;
+
 	} else {
+
 		hsyncstartpos = maxhpos_short + 13;
 		hsyncendpos = 24;
+
 	}
 	hpos_offset = 0;
 	eventtab[ev_hsync].oldcycles = get_cycles ();
@@ -4809,7 +4834,7 @@ static void COPJMP (int num, int vblank)
 
 	if (!oldstrobe)
 		cop_state.state_prev = cop_state.state;
-	if ((cop_state.state == COP_wait || cop_state.state == COP_waitforever) && !vblank) {
+	if ((cop_state.state == COP_wait || cop_state.state == COP_waitforever) && !vblank && dmaen(DMA_COPPER)) {
 		cop_state.state = COP_strobe_delay1x;
 	} else {
 		cop_state.state = vblank ? COP_start_delay : (copper_access ? COP_strobe_delay1 : COP_strobe_extra);
@@ -4976,6 +5001,31 @@ STATIC_INLINE int use_eventmode (uae_u16 v)
 	if (currprefs.cpu_cycle_exact && currprefs.cpu_model <= 68020)
 		return 1;
 	return 0;
+}
+
+
+void rethink_uae_int(void)
+{
+	bool irq2 = false;
+	bool irq6 = false;
+
+	if (uae_int_requested) {
+		if (uae_int_requested & 0xff00)
+			irq6 = true;
+		if (uae_int_requested & 0x00ff)
+			irq2 = true;
+	}
+
+	{
+		extern void bsdsock_fake_int_handler(void);
+		extern int volatile bsd_int_requested;
+		if (bsd_int_requested)
+			bsdsock_fake_int_handler();
+	}
+
+	uae_u16 mask = (irq6 ? 0x2000 : 0) | (irq2 ? 0x0008 : 0);
+	if (mask)
+		INTREQ_0(0x8000 | mask);
 }
 
 static void rethink_intreq (void)
@@ -5279,7 +5329,7 @@ static void BPLCON0 (int hpos, uae_u16 v)
 		v &= ~0x00F1;
 	else if (! (currprefs.chipset_mask & CSMASK_AGA))
 		v &= ~0x00B0;
-	v &= ~(0x0080 | 0x0020);
+	v &= ~0x0080;
 
 #if SPRBORDER
 	v |= 1;
@@ -5612,7 +5662,7 @@ static void BLTBPTH (int hpos, uae_u16 v)
 {
 	maybe_blit (hpos, 0);
 	if (bltstate != BLT_done && currprefs.blitter_cycle_exact && currprefs.cpu_cycle_exact) {
-		bltptx = (bltapt & 0xffff) | ((uae_u32)v << 16);
+		bltptx = (bltbpt & 0xffff) | ((uae_u32)v << 16);
 		bltptxpos = hpos;
 		bltptxc = 2;
 	} else {
@@ -6138,10 +6188,6 @@ STATIC_INLINE int copper_cant_read2 (int hpos, int alloc)
 	if ((hpos == maxhpos - 3) && (maxhpos & 1) && alloc >= 0) {
 		if (alloc) {
 			alloc_cycle (hpos, CYCLE_COPPER);
-#ifdef DEBUGGER
-			if (debug_dma)
-				record_dma_event (DMA_EVENT_COPPERWANTED, hpos, vpos);
-#endif
 		}
 		return -1;
 	}
@@ -6152,7 +6198,7 @@ static int copper_cant_read (int hpos, int alloc)
 {
 	int cant = copper_cant_read2 (hpos, alloc);
 #ifdef DEBUGGER
-	if (cant && debug_dma && alloc)
+	if (cant && debug_dma)
 		record_dma_event (DMA_EVENT_COPPERWANTED, hpos, vpos);
 #endif
 	return cant;
@@ -6210,6 +6256,15 @@ static void copper_write (uae_u32 v)
 {
 	custom_wput_copper (current_hpos (), v >> 16, v & 0xffff, 0);
 }
+
+/*
+	CPU write COPJMP wakeup sequence when copper is waiting:
+	- Idle cycle (can be used by other DMA channel)
+	- Read word from current copper pointer (next word after wait instruction) to 1FE
+	  This cycle can conflict with blitter DMA.
+	Normal copper cycles resume
+	- Write word from new copper pointer to 8C
+*/
 
 static void update_copper (int until_hpos)
 {
@@ -6324,16 +6379,17 @@ static void update_copper (int until_hpos)
 			break;
 
 		case COP_strobe_delay1x:
-			// First cycle after COPJMP and Copper was waiting. This is the buggy one.
-			// Cycle can be free and copper won't allocate it.
-			// If Blitter uses this cycle = Copper's address gets copied blitter DMA pointer..
+			// First cycle after COPJMP and Copper was waiting.
 			cop_state.state = COP_strobe_delay2x;
 			break;
 		case COP_strobe_delay2x:
-			// Second cycle fetches following word and tosses it away. Must be free cycle
-			// but is not allocated, blitter or cpu can still use it.
+			// Second cycle fetches following word and tosses it away.
+			// Cycle can be free and copper won't allocate it.
+			// If Blitter uses this cycle = Copper's PC gets copied to blitter DMA pointer..
 			if (copper_cant_read (old_hpos, 1))
 				continue;
+			if (debug_dma)
+				record_dma_event(DMA_EVENT_SPECIAL, old_hpos, vpos);
 			cycle_line[old_hpos] |= CYCLE_COPPER_SPECIAL;
 #ifdef DEBUGGER
 			if (debug_dma)
@@ -7938,8 +7994,11 @@ static void hsync_handler_post (bool onvsync)
 	bool ciahsyncs = !(bplcon0 & 2) || ((bplcon0 & 2) && currprefs.genlock && (!currprefs.ntscmode || genlockhtoggle));
 	bool ciavsyncs = !(bplcon0 & 2) || ((bplcon0 & 2) && currprefs.genlock && genlockvtoggle);
 
-	CIA_hsync_posthandler (ciahsyncs);
-	if (ciahsyncs) {
+	if (currprefs.cs_cd32cd) {
+		CIA_hsync_posthandler(true);
+		CIAB_tod_handler(18);
+	} else if (ciahsyncs) {
+		CIA_hsync_posthandler(ciahsyncs);
 		if (beamcon0 & (0x80 | 0x100)) {
 			if (hsstop < (maxhpos & ~1) && hsstrt < maxhpos)
 				CIAB_tod_handler(hsstop);
@@ -7947,7 +8006,17 @@ static void hsync_handler_post (bool onvsync)
 			CIAB_tod_handler(18);
 		}
 	}
-	if (currprefs.cs_ciaatod > 0) {
+
+	if (currprefs.cs_cd32cd) {
+
+		if (cia_hsync < maxhpos) {
+			CIAA_tod_inc(cia_hsync);
+			cia_hsync += (akiko_ntscmode() ? 262 : 313) * maxhpos;
+		} else {
+			cia_hsync -= maxhpos;
+		}
+
+	} else if (currprefs.cs_ciaatod > 0) {
 #if 0
 		static uae_s32 oldtick;
 		uae_s32 tick = read_system_time (); // milliseconds
@@ -7961,7 +8030,6 @@ static void hsync_handler_post (bool onvsync)
 			oldtick += ms;
 		}
 #else
-		static int cia_hsync;
 		if (cia_hsync < maxhpos) {
 			int newcount;
 			CIAA_tod_inc (cia_hsync);
@@ -8178,25 +8246,7 @@ static void hsync_handler_post (bool onvsync)
 		reset_decisions ();
 	}
 
-	if (uae_int_requested) {
-		if (uae_int_requested & 0xff00)
-			INTREQ(0x8000 | 0x2000);
-		if (uae_int_requested & 0x0ff)
-			INTREQ(0x8000 | 0x0008);
-	}
-
-	{
-		if (uaenet_int_requested || (uaenet_vsync_requested && vpos == 10)) {
-			INTREQ (0x8000 | 0x0008);
-		}
-	}
-
-	{
-		extern void bsdsock_fake_int_handler (void);
-		extern int volatile bsd_int_requested;
-		if (bsd_int_requested)
-			bsdsock_fake_int_handler ();
-	}
+	rethink_uae_int();
 
 	/* Default to no bitplane DMA overriding sprite DMA */
 	plfstrt_sprite = 0xff;
@@ -8341,6 +8391,7 @@ void custom_reset (bool hardreset, bool keyboardreset)
 	nr_armed = 0;
 
 	if (!savestate_state) {
+		cia_hsync = 0;
 		extra_cycle = 0;
 		hsync_counter = 0;
 		vsync_counter = 0;
@@ -9863,16 +9914,28 @@ uae_u32 wait_cpu_cycle_read (uaecptr addr, int mode)
 			reg |= 2;
 		else
 			reg |= 1;
-		dr = record_dma (reg, v, addr, hpos, vpos, DMARECORD_CPU);
+		dr = record_dma (reg, v, addr, hpos, vpos, mode == -2 || mode == 2 ? DMARECORD_CPU_I : DMARECORD_CPU_D);
 		checknasty (hpos, vpos);
 	}
 #endif
-	if (mode < 0)
-		v = get_long (addr);
-	else if (mode > 0)
-		v = get_word (addr);
-	else if (mode == 0)
-		v = get_byte (addr);
+	switch(mode)
+	{
+		case -1:
+		v = get_long(addr);
+		break;
+		case -2:
+		v = get_longi(addr);
+		break;
+		case 1:
+		v = get_word(addr);
+		break;
+		case 2:
+		v = get_wordi(addr);
+		break;
+		case 0:
+		v = get_byte(addr);
+		break;
+	}
 
 #ifdef DEBUGGER
 	if (debug_dma)
@@ -9905,16 +9968,27 @@ uae_u32 wait_cpu_cycle_read_ce020 (uaecptr addr, int mode)
 			reg |= 2;
 		else
 			reg |= 1;
-		dr = record_dma (reg, v, addr, hpos, vpos, DMARECORD_CPU);
+		dr = record_dma (reg, v, addr, hpos, vpos, mode == -2 || mode == 2 ? DMARECORD_CPU_I : DMARECORD_CPU_D);
 		checknasty (hpos, vpos);
 	}
 #endif
-	if (mode < 0)
-		v = get_long (addr);
-	else if (mode > 0)
-		v = get_word (addr);
-	else if (mode == 0)
-		v = get_byte (addr);
+	switch (mode) {
+		case -1:
+		v = get_long(addr);
+		break;
+		case -2:
+		v = get_longi(addr);
+		break;
+		case 1:
+		v = get_word(addr);
+		break;
+		case 2:
+		v = get_wordi(addr);
+		break;
+		case 0:
+		v = get_byte(addr);
+		break;
+	}
 
 #ifdef DEBUGGER
 	if (debug_dma)
@@ -9944,7 +10018,7 @@ void wait_cpu_cycle_write (uaecptr addr, int mode, uae_u32 v)
 			reg |= 2;
 		else
 			reg |= 1;
-		record_dma (reg, v, addr, hpos, vpos, DMARECORD_CPU);
+		record_dma (reg, v, addr, hpos, vpos, DMARECORD_CPU_D);
 		checknasty (hpos, vpos);
 	}
 #endif
@@ -9979,7 +10053,7 @@ void wait_cpu_cycle_write_ce020 (uaecptr addr, int mode, uae_u32 v)
 			reg |= 2;
 		else
 			reg |= 1;
-		record_dma (reg, v, addr, hpos, vpos, DMARECORD_CPU);
+		record_dma (reg, v, addr, hpos, vpos, DMARECORD_CPU_D);
 		checknasty (hpos, vpos);
 	}
 #endif

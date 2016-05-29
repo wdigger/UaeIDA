@@ -136,12 +136,11 @@ static int lf, hf;
 
 static void video_calc_gammatable (void)
 {
-	float bri, con, gam, gams[3], v;
-	uae_u32 vi;
+	float bri, con, gam, gams[3];
 
 	bri = ((float)(currprefs.gfx_luminance)) * (128.0f / 1000.0f);
 	con = ((float)(currprefs.gfx_contrast + 1000)) / 1000.0f;
-	gam = ((float)(1000 - currprefs.gfx_gamma)) / 1000.0f;
+	gam = ((float)(1000 - currprefs.gfx_gamma)) / 1000.0f - 1.0;
 	gams[0] = gam + ((float)(1000 - currprefs.gfx_gamma_ch[0])) / 1000.0f;
 	gams[1] = gam + ((float)(1000 - currprefs.gfx_gamma_ch[1])) / 1000.0f;
 	gams[2] = gam + ((float)(1000 - currprefs.gfx_gamma_ch[2])) / 1000.0f;
@@ -151,16 +150,30 @@ static void video_calc_gammatable (void)
 
 	for (int i = 0; i < (256 * 3); i++) {
 		for (int j = 0; j < 3; j++) {
-			v = video_gamma((float)(i - 256), gams[j], bri, con);
+			float val = i - 256;
+			float v;
 
-			vi = (uae_u32)v;
-			if (vi > 255)
-				vi = 255;
+			if (currprefs.gfx_threebitcolors == 2) {
+				val *= 2;
+			} else if (currprefs.gfx_threebitcolors == 3) {
+				val = (val * 252.0) / 119.0;
+			} else if (currprefs.gfx_threebitcolors == 1) {
+				val = (val * 252.0) / 238.0;
+			}
 
-			if (currprefs.gfx_luminance == 0 && currprefs.gfx_contrast == 0 && currprefs.gfx_gamma == 0)
-				vi = i & 0xff;
+			if (currprefs.gfx_luminance == 0 && currprefs.gfx_contrast == 0 && currprefs.gfx_gamma == 0 &&
+				currprefs.gfx_gamma_ch[0] == 0 && currprefs.gfx_gamma_ch[1] == 0 && currprefs.gfx_gamma_ch[2] == 0) {
+				v = val;
+			} else {
+				v = video_gamma(val, gams[j], bri, con);
+			}
 
-			gamma[i][j] = vi;
+			if (v < 0.0)
+				v = 0.0;
+			if (v > 255.0)
+				v = 255.0;
+
+			gamma[i][j] = (uae_u32)(v + 0.5);
 		}
 	}
 }
@@ -363,12 +376,13 @@ void alloc_colors64k (int rw, int gw, int bw, int rs, int gs, int bs, int aw, in
 		r = gamma[r + j][0];
 		g = gamma[g + j][1];
 		b = gamma[b + j][2];
-		xcolors[i] = doMask(r, rw, rs) | doMask(g, gw, gs) | doMask(b, bw, bs) | doAlpha (alpha, aw, as);
+		xcolors[i] = doMask(r, rw, rs) | doMask(g, gw, gs) | doMask(b, bw, bs) | doAlpha(alpha, aw, as);
 		if (byte_swap) {
-			if (bpp <= 16)
-				xcolors[i] = bswap_16 (xcolors[i]);
-			else
-				xcolors[i] = bswap_32 (xcolors[i]);
+			if (bpp <= 16) {
+				xcolors[i] = bswap_16(xcolors[i]);
+			} else {
+				xcolors[i] = bswap_32(xcolors[i]);
+			}
 		}
 		if (bpp <= 16) {
 			/* Fill upper 16 bits of each colour value

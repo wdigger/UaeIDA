@@ -11,6 +11,7 @@
 #define MOUSECLIP_LOG 0
 #define MOUSECLIP_HIDE 1
 #define TOUCH_SUPPORT 1
+#define TOUCH_DEBUG 1
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -182,6 +183,8 @@ static int timermode, timeon;
 static int timehandlecounter;
 static HANDLE timehandle[MAX_TIMEHANDLES];
 static bool timehandleinuse[MAX_TIMEHANDLES];
+static HANDLE cpu_wakeup_event;
+static volatile bool cpu_wakeup_event_triggered;
 int sleep_resolution;
 static CRITICAL_SECTION cs_time;
 
@@ -252,9 +255,18 @@ static int init_mmtimer (void)
 	sleep_resolution = 1000 / mm_timerres;
 	for (i = 0; i < MAX_TIMEHANDLES; i++)
 		timehandle[i] = CreateEvent (NULL, TRUE, FALSE, NULL);
+	cpu_wakeup_event = CreateEvent(NULL, FALSE, FALSE, NULL);
 	InitializeCriticalSection (&cs_time);
 	timehandlecounter = 0;
 	return 1;
+}
+
+void sleep_cpu_wakeup(void)
+{
+	if (!cpu_wakeup_event_triggered) {
+		cpu_wakeup_event_triggered = true;
+		SetEvent(cpu_wakeup_event);
+	}
 }
 
 static void sleep_millis2 (int ms, bool main)
@@ -263,8 +275,12 @@ static void sleep_millis2 (int ms, bool main)
 	int start = 0;
 	int cnt;
 
-	if (main)
+	if (main) {
+		if (WaitForSingleObject(cpu_wakeup_event, 0) == WAIT_OBJECT_0) {
+			return;
+		}
 		start = read_processor_time ();
+	}
 	EnterCriticalSection (&cs_time);
 	for (;;) {
 		timehandlecounter++;
@@ -278,7 +294,15 @@ static void sleep_millis2 (int ms, bool main)
 	}
 	LeaveCriticalSection (&cs_time);
 	TimerEvent = timeSetEvent (ms, 0, (LPTIMECALLBACK)timehandle[cnt], 0, TIME_ONESHOT | TIME_CALLBACK_EVENT_SET);
-	WaitForSingleObject (timehandle[cnt], ms);
+	if (main) {
+		HANDLE evt[2];
+		evt[0] = timehandle[cnt];
+		evt[1] = cpu_wakeup_event;
+		DWORD status = WaitForMultipleObjects(2, evt, FALSE, ms);
+		cpu_wakeup_event_triggered = false;
+	} else {
+		WaitForSingleObject(timehandle[cnt], ms);
+	}
 	ResetEvent (timehandle[cnt]);
 	timeKillEvent (TimerEvent);
 	timehandleinuse[cnt] = false;
@@ -512,7 +536,13 @@ static void setcursorshape (void)
 
 static void releasecapture (void)
 {
-	//write_log (_T("releasecapture %d\n"), showcursor);
+	//write_log(_T("releasecapture %d\n"), showcursor);
+#if 0
+	CURSORINFO pci;
+	pci.cbSize = sizeof pci;
+	GetCursorInfo(&pci);
+	write_log(_T("PCI %08x %p %d %d\n"), pci.flags, pci.hCursor, pci.ptScreenPos.x, pci.ptScreenPos.y);
+#endif
 	if (!showcursor)
 		return;
 	ClipCursor (NULL);
@@ -655,7 +685,6 @@ static void setmouseactive2 (int active, bool allowpause)
 				showcursor = 1;
 				updatemouseclip ();
 			}
-			showcursor = 1;
 			setcursor (-30000, -30000);
 		}
 		inputdevice_acquire (TRUE);
@@ -951,8 +980,11 @@ void setmouseactivexy (int x, int y, int dir)
 
 int isfocus (void)
 {
-	if (isfullscreen () > 0)
-		return 2;
+	if (isfullscreen () > 0) {
+		if (!minimized)
+			return 2;
+		return 0;
+	}
 	if (currprefs.input_tablet >= TABLET_MOUSEHACK && currprefs.input_magic_mouse) {
 		if (mouseinside)
 			return 2;
@@ -1036,7 +1068,6 @@ static void add_media_insert_queue(HWND hwnd, const TCHAR *drvname, int retrycnt
 }
 
 #if TOUCH_SUPPORT
-#define TOUCH_DEBUG 0
 static int touch_touched;
 static DWORD touch_time;
 
@@ -1502,7 +1533,7 @@ static LRESULT CALLBACK AmigaWindowProc (HWND hWnd, UINT message, WPARAM wParam,
 		return 0;
 
 	case WM_DROPFILES:
-		dragdrop (hWnd, (HDROP)wParam, &changed_prefs, -1);
+		dragdrop (hWnd, (HDROP)wParam, &changed_prefs, -2);
 		return 0;
 
 	case WM_TIMER:
@@ -1555,6 +1586,7 @@ static LRESULT CALLBACK AmigaWindowProc (HWND hWnd, UINT message, WPARAM wParam,
 			device_change_timer = 0;
 			KillTimer(hWnd, 4);
 			inputdevice_devicechange (&changed_prefs);
+			inputdevice_copyjports(&changed_prefs, &workprefs);
 		} else if (wParam == 1) {
 #ifdef PARALLEL_PORT
 			finishjob ();
@@ -2906,7 +2938,7 @@ void logging_init (void)
 		SystemInfo.wProcessorArchitecture, SystemInfo.wProcessorLevel, SystemInfo.wProcessorRevision,
 		SystemInfo.dwNumberOfProcessors, filedate, os_touch);
 	write_log (_T("\n(c) 1995-2001 Bernd Schmidt   - Core UAE concept and implementation.")
-		_T("\n(c) 1998-2015 Toni Wilen      - Win32 port, core code updates.")
+		_T("\n(c) 1998-2016 Toni Wilen      - Win32 port, core code updates.")
 		_T("\n(c) 1996-2001 Brian King      - Win32 port, Picasso96 RTG, and GUI.")
 		_T("\n(c) 1996-1999 Mathias Ortmann - Win32 port and bsdsocket support.")
 		_T("\n(c) 2000-2001 Bernd Meyer     - JIT engine.")
@@ -3014,8 +3046,8 @@ void fullpath (TCHAR *path, int size)
 done:;
 	} else {
 		TCHAR tmp[MAX_DPATH];
-		_tcscpy (tmp, path);
-		GetFullPathName (tmp, size, path, NULL);
+		_tcscpy(tmp, path);
+		DWORD err = GetFullPathName (tmp, size, path, NULL);
 	}
 }
 void getpathpart (TCHAR *outpath, int size, const TCHAR *inpath)
@@ -3045,11 +3077,11 @@ uae_u8 *target_load_keyfile (struct uae_prefs *p, const TCHAR *path, int *sizep,
 	int size;
 	TCHAR *libname = _T("amigaforever.dll");
 
-	h = WIN32_LoadLibrary (libname);
+	h = WIN32_LoadLibrary(libname);
 	if (!h) {
 		TCHAR path[MAX_DPATH];
 		_stprintf (path, _T("%s..\\Player\\%s"), start_path_exe, libname);
-		h = WIN32_LoadLibrary2 (path);
+		h = WIN32_LoadLibrary(path);
 		if (!h) {
 			TCHAR *afr = _wgetenv (_T("AMIGAFOREVERROOT"));
 			if (afr) {
@@ -3057,7 +3089,7 @@ uae_u8 *target_load_keyfile (struct uae_prefs *p, const TCHAR *path, int *sizep,
 				_tcscpy (tmp, afr);
 				fixtrailing (tmp);
 				_stprintf (path, _T("%sPlayer\\%s"), tmp, libname);
-				h = WIN32_LoadLibrary2 (path);
+				h = WIN32_LoadLibrary(path);
 			}
 		}
 	}
@@ -3460,11 +3492,11 @@ void target_fixup_options (struct uae_prefs *p)
 		error_log (_T("DirectDraw is not RTG hardware sprite compatible."));
 		p->rtg_hardwaresprite = false;
 	}
-	if (p->rtgmem_type >= GFXBOARD_HARDWARE) {
+	if (p->rtgboards[0].rtgmem_type >= GFXBOARD_HARDWARE) {
 		p->rtg_hardwareinterrupt = false;
 		p->rtg_hardwaresprite = false;
 		p->win32_rtgmatchdepth = false;
-		if (gfxboard_need_byteswap (p->rtgmem_type))
+		if (gfxboard_need_byteswap (&p->rtgboards[0]))
 			p->color_mode = 5;
 		if (p->ppc_model && !p->gfx_api) {
 			error_log (_T("Graphics board and PPC: Direct3D enabled."));
@@ -3550,6 +3582,7 @@ void target_default_options (struct uae_prefs *p, int type)
 
 static const TCHAR *scsimode[] = { _T("SCSIEMU"), _T("SPTI"), _T("SPTI+SCSISCAN"), NULL };
 static const TCHAR *statusbarmode[] = { _T("none"), _T("normal"), _T("extended"), NULL };
+static const TCHAR *configmult[] = { _T("1x"), _T("2x"), _T("3x"), _T("4x"), _T("5x"), _T("6x"), _T("7x"), _T("8x"), NULL };
 
 static struct midiportinfo *getmidiport (struct midiportinfo **mi, int devid)
 {
@@ -3667,6 +3700,18 @@ void target_save_options (struct zfile *f, struct uae_prefs *p)
 	cfgfile_target_dwrite(f, _T("recording_height"), _T("%d"), p->aviout_height);
 	cfgfile_target_dwrite(f, _T("recording_x"), _T("%d"), p->aviout_xoffset);
 	cfgfile_target_dwrite(f, _T("recording_y"), _T("%d"), p->aviout_yoffset);
+	cfgfile_target_dwrite(f, _T("screenshot_width"), _T("%d"), p->screenshot_width);
+	cfgfile_target_dwrite(f, _T("screenshot_height"), _T("%d"), p->screenshot_height);
+	cfgfile_target_dwrite(f, _T("screenshot_x"), _T("%d"), p->screenshot_xoffset);
+	cfgfile_target_dwrite(f, _T("screenshot_y"), _T("%d"), p->screenshot_yoffset);
+	cfgfile_target_dwrite(f, _T("screenshot_min_width"), _T("%d"), p->screenshot_min_width);
+	cfgfile_target_dwrite(f, _T("screenshot_min_height"), _T("%d"), p->screenshot_min_height);
+	cfgfile_target_dwrite(f, _T("screenshot_max_width"), _T("%d"), p->screenshot_max_width);
+	cfgfile_target_dwrite(f, _T("screenshot_max_height"), _T("%d"), p->screenshot_max_height);
+	cfgfile_target_dwrite(f, _T("screenshot_output_width_limit"), _T("%d"), p->screenshot_output_width);
+	cfgfile_target_dwrite(f, _T("screenshot_output_height_limit"), _T("%d"), p->screenshot_output_height);
+	cfgfile_target_dwrite_str(f, _T("screenshot_mult_width"), configmult[p->screenshot_xmult]);
+	cfgfile_target_dwrite_str(f, _T("screenshot_mult_height"), configmult[p->screenshot_ymult]);
 }
 
 void target_restart (void)
@@ -3759,9 +3804,26 @@ int target_parse_option (struct uae_prefs *p, const TCHAR *option, const TCHAR *
 	if (cfgfile_intval(option, value, _T("recording_width"), &p->aviout_width, 1)
 		|| cfgfile_intval(option, value, _T("recording_height"), &p->aviout_height, 1)
 		|| cfgfile_intval(option, value, _T("recording_x"), &p->aviout_xoffset, 1)
-		|| cfgfile_intval(option, value, _T("recording_y"), &p->aviout_yoffset, 1))
+		|| cfgfile_intval(option, value, _T("recording_y"), &p->aviout_yoffset, 1)
+
+		|| cfgfile_intval(option, value, _T("screenshot_width"), &p->screenshot_width, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_height"), &p->screenshot_height, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_x"), &p->screenshot_xoffset, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_y"), &p->screenshot_yoffset, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_min_width"), &p->screenshot_min_width, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_min_height"), &p->screenshot_min_height, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_max_width"), &p->screenshot_max_width, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_max_height"), &p->screenshot_max_height, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_output_width_limit"), &p->screenshot_output_width, 1)
+		|| cfgfile_intval(option, value, _T("screenshot_output_height_limit"), &p->screenshot_output_height, 1))
+
 		return 1;
 
+	if (cfgfile_strval(option, value, _T("screenshot_mult_width"), &p->screenshot_xmult, configmult, 0))
+		return 1;
+	if (cfgfile_strval(option, value, _T("screenshot_mult_height"), &p->screenshot_ymult, configmult, 0))
+		return 1;
+		
 	if (cfgfile_string(option, value, _T("expansion_gui_page"), tmpbuf, sizeof tmpbuf / sizeof(TCHAR))) {
 		TCHAR *p = _tcschr(tmpbuf, ',');
 		if (p != NULL)
@@ -4092,7 +4154,7 @@ void fetch_path (const TCHAR *name, TCHAR *out, int size)
 			_tcscpy (out, start_path_data);
 	}
 	fixtrailing (out);
-	fullpath (out, size);
+	fullpath (out, size2);
 }
 
 int get_rom_path (TCHAR *out, pathtype mode)
@@ -4749,10 +4811,12 @@ static void WIN32_HandleRegistryStuff (void)
 	else
 		regsetint (NULL, _T("RelativePaths"), relativepaths);
 
-	regqueryint (NULL, _T("QuickStartMode"), &quickstart);
+	if (!regqueryint (NULL, _T("QuickStartMode"), &quickstart))
+		quickstart = 1;
 	reopen_console ();
 	fetch_path (_T("ConfigurationPath"), path, sizeof (path) / sizeof (TCHAR));
-	path[_tcslen (path) - 1] = 0;
+	if (path[0])
+		path[_tcslen (path) - 1] = 0;
 	if (GetFileAttributes (path) == 0xffffffff) {
 		TCHAR path2[MAX_DPATH];
 		_tcscpy (path2, path);
@@ -6660,12 +6724,6 @@ HMODULE WIN32_LoadLibrary (const TCHAR *name)
 {
 	return WIN32_LoadLibrary_2 (name, TRUE);
 }
-HMODULE WIN32_LoadLibrary2 (const TCHAR *name)
-{
-	HMODULE m = LoadLibrary (name);
-	LLError (m, name);
-	return m;
-}
 
 int isdllversion (const TCHAR *name, int version, int revision, int subver, int subrev)
 {
@@ -6704,9 +6762,9 @@ int get_guid_target (uae_u8 *out)
 	if (CoCreateGuid (&guid) != S_OK)
 		return 0;
 	out[0] = guid.Data1 >> 24;
-	out[1] = guid.Data1 >> 16;
-	out[2] = guid.Data1 >>  8;
-	out[3] = guid.Data1 >>  0;
+	out[1] = (uae_u8)(guid.Data1 >> 16);
+	out[2] = (uae_u8)(guid.Data1 >>  8);
+	out[3] = (uae_u8)(guid.Data1 >>  0);
 	out[4] = guid.Data2 >>  8;
 	out[5] = guid.Data2 >>  0;
 	out[6] = guid.Data3 >>  8;

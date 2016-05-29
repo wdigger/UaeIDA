@@ -399,6 +399,7 @@
 #define IDS_NUMSG_NO_PPC                404
 #define IDS_NUMSG_UAEBOOTROM_PCC        405
 #define IDS_AUTOSCALE_OVERSCAN_BLANK    408
+#define IDS_SCREEN_ADAPTIVE_SYNC        409
 #define IDS_QS_MODELS                   1000
 #define IDS_QS_MODEL_A500               1001
 #define IDS_QS_MODEL_A500P              1002
@@ -490,6 +491,7 @@
 #define IDC_PROGRAMMED_AUTO             1181
 #define IDC_AUTORESOLUTIONVGA           1181
 #define IDC_RATE2ENABLE                 1182
+#define IDC_GRAYSCALE                   1183
 #define IDC_FRAMERATE                   1185
 #define IDC_XSIZE                       1187
 #define IDC_YSIZE                       1188
@@ -951,6 +953,8 @@
 #define IDC_STATEREC_AUTOPLAY           1652
 #define IDC_SOUNDFREQTXT                1653
 #define IDC_PANEL_FRAME                 1653
+#define IDC_SCREENSHOT_ORIGINALSIZE2    1653
+#define IDC_SCREENSHOT_CLIP             1653
 #define IDC_SOUNDFILTERTXT              1654
 #define IDC_PANEL_FRAME_OUTER           1654
 #define IDC_SOUNDSTEREO                 1655
@@ -1114,6 +1118,7 @@
 #define IDC_DBG_MEMUP                   1755
 #define IDC_CS_BYTECUSTOMWRITEBUG       1755
 #define IDC_DBG_MEM                     1756
+#define IDC_CS_COMPOSITECOLOR           1756
 #define IDC_DBG_DASM                    1757
 #define IDC_DBG_MEMDOWNFAST             1758
 #define IDC_DBG_MEMTOPC                 1759
@@ -1249,6 +1254,7 @@
 #define IDC_Z3MAPPING                   1844
 #define IDC_CPUBOARD_SUBTYPE            1845
 #define IDC_CYCLEEXACTMEMORY            1846
+#define IDC_UAEBOARD_TYPE               1848
 #define ID__FLOPPYDRIVES                40004
 #define ID_FLOPPYDRIVES_DF0             40005
 #define ID_ST_CONFIGURATION             40010
@@ -1300,7 +1306,7 @@
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        399
 #define _APS_NEXT_COMMAND_VALUE         40050
-#define _APS_NEXT_CONTROL_VALUE         1848
+#define _APS_NEXT_CONTROL_VALUE         1849
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
