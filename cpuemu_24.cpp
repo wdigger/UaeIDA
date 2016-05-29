@@ -16000,7 +16000,6 @@ void REGPARAM2 CPUFUNC(op_4e73_24)(uae_u32 opcode)
 		else if (frame == 0x1) { m68k_areg (regs, 7) += offset; }
 		else if (frame == 0x2) { m68k_areg (regs, 7) += offset + 4; break; }
 		else if (frame == 0x4) { m68k_areg (regs, 7) += offset + 8; break; }
-		else if (frame == 0x8) { m68k_areg (regs, 7) += offset + 50; break; }
 		else if (frame == 0x7) { m68k_areg (regs, 7) += offset + 52; break; }
 		else if (frame == 0x9) { m68k_areg (regs, 7) += offset + 12; break; }
 		else if (frame == 0xa) { m68k_areg (regs, 7) += offset + 24; break; }
@@ -33298,13 +33297,8 @@ return;
 void REGPARAM2 CPUFUNC(op_f000_24)(uae_u32 opcode)
 {
 	uae_u32 srcreg = (opcode & 7);
-{if (!regs.s) { Exception (8); goto l_241788; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-	uae_u16 extraa = 0;
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241788;
-}}l_241788: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33314,13 +33308,8 @@ return;
 void REGPARAM2 CPUFUNC(op_f008_24)(uae_u32 opcode)
 {
 	uae_u32 srcreg = (opcode & 7);
-{if (!regs.s) { Exception (8); goto l_241789; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-	uae_u16 extraa = 0;
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241789;
-}}l_241789: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33330,14 +33319,8 @@ return;
 void REGPARAM2 CPUFUNC(op_f010_24)(uae_u32 opcode)
 {
 	uae_u32 srcreg = (opcode & 7);
-{if (!regs.s) { Exception (8); goto l_241790; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-{	uaecptr extraa;
-	extraa = m68k_areg (regs, srcreg);
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241790;
-}}}l_241790: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33347,15 +33330,8 @@ return;
 void REGPARAM2 CPUFUNC(op_f018_24)(uae_u32 opcode)
 {
 	uae_u32 srcreg = (opcode & 7);
-{if (!regs.s) { Exception (8); goto l_241791; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-{	uaecptr extraa;
-	extraa = m68k_areg (regs, srcreg);
-	m68k_areg (regs, srcreg) += 4;
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241791;
-}}}l_241791: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33365,15 +33341,8 @@ return;
 void REGPARAM2 CPUFUNC(op_f020_24)(uae_u32 opcode)
 {
 	uae_u32 srcreg = (opcode & 7);
-{if (!regs.s) { Exception (8); goto l_241792; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-{	uaecptr extraa;
-	extraa = m68k_areg (regs, srcreg) - 4;
-	m68k_areg (regs, srcreg) = extraa;
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241792;
-}}}l_241792: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33383,15 +33352,8 @@ return;
 void REGPARAM2 CPUFUNC(op_f028_24)(uae_u32 opcode)
 {
 	uae_u32 srcreg = (opcode & 7);
-{if (!regs.s) { Exception (8); goto l_241793; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-{	uaecptr extraa;
-	extraa = m68k_areg (regs, srcreg) + (uae_s32)(uae_s16)get_iword_cache_040 (0);
-	m68k_incpci (2);
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241793;
-}}}l_241793: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33401,14 +33363,8 @@ return;
 void REGPARAM2 CPUFUNC(op_f030_24)(uae_u32 opcode)
 {
 	uae_u32 srcreg = (opcode & 7);
-{if (!regs.s) { Exception (8); goto l_241794; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-{	uaecptr extraa;
-{	extraa = x_get_disp_ea_040 (m68k_areg (regs, srcreg), 0);
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241794;
-}}}}l_241794: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33417,15 +33373,8 @@ return;
 #ifndef CPUEMU_68000_ONLY
 void REGPARAM2 CPUFUNC(op_f038_24)(uae_u32 opcode)
 {
-{if (!regs.s) { Exception (8); goto l_241795; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-{	uaecptr extraa;
-	extraa = (uae_s32)(uae_s16)get_iword_cache_040 (0);
-	m68k_incpci (2);
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241795;
-}}}l_241795: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 
@@ -33434,15 +33383,8 @@ return;
 #ifndef CPUEMU_68000_ONLY
 void REGPARAM2 CPUFUNC(op_f039_24)(uae_u32 opcode)
 {
-{if (!regs.s) { Exception (8); goto l_241796; }
-{	uaecptr pc = m68k_getpci ();
-	uae_u16 extra = get_iword_cache_040 (2);
-	m68k_incpci (4);
-{	uaecptr extraa;
-	extraa = get_ilong_cache_040 (0);
-	m68k_incpci (4);
-	if (mmu_op30 (pc, opcode, extra, extraa)) goto l_241796;
-}}}l_241796: ;
+{	op_illg (opcode);
+}	m68k_incpci (2);
 return;
 }
 

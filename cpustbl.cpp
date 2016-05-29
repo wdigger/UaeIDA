@@ -29407,7 +29407,7 @@ const struct cputbl CPUFUNC(op_smalltbl_24)[] = {
 { (cpuop_func*)CPUFUNC(op_f028_24), 0xf028, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 #endif
 #ifndef CPUEMU_68000_ONLY
-{ (cpuop_func*)CPUFUNC(op_f030_24), 0xf030, -1, { -3, 0 }, 0 }, /* MMUOP030 */
+{ (cpuop_func*)CPUFUNC(op_f030_24), 0xf030, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 #endif
 #ifndef CPUEMU_68000_ONLY
 { (cpuop_func*)CPUFUNC(op_f038_24), 0xf038, -1, { 0, 0 }, 0 }, /* MMUOP030 */
@@ -31435,7 +31435,7 @@ const struct cputbl CPUFUNC(op_smalltbl_25)[] = {
 { (cpuop_func*)CPUFUNC(op_f018_24), 0xf018, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 { (cpuop_func*)CPUFUNC(op_f020_24), 0xf020, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 { (cpuop_func*)CPUFUNC(op_f028_24), 0xf028, -1, { 0, 0 }, 0 }, /* MMUOP030 */
-{ (cpuop_func*)CPUFUNC(op_f030_24), 0xf030, -1, { -3, 0 }, 0 }, /* MMUOP030 */
+{ (cpuop_func*)CPUFUNC(op_f030_24), 0xf030, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 { (cpuop_func*)CPUFUNC(op_f038_24), 0xf038, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 { (cpuop_func*)CPUFUNC(op_f039_24), 0xf039, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 { (cpuop_func*)CPUFUNC(op_f200_24), 0xf200, -1, { 0, 0 }, 0 }, /* FPP */
@@ -33812,7 +33812,7 @@ const struct cputbl CPUFUNC(op_smalltbl_31)[] = {
 { CPUFUNC(op_f028_31), 0xf028, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 #endif
 #ifndef CPUEMU_68000_ONLY
-{ CPUFUNC(op_f030_31), 0xf030, -1, { -3, 0 }, 0 }, /* MMUOP030 */
+{ CPUFUNC(op_f030_31), 0xf030, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 #endif
 #ifndef CPUEMU_68000_ONLY
 { CPUFUNC(op_f038_31), 0xf038, -1, { 0, 0 }, 0 }, /* MMUOP030 */
@@ -38769,7 +38769,7 @@ const struct cputbl CPUFUNC(op_smalltbl_33)[] = {
 { CPUFUNC(op_f028_33), 0xf028, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 #endif
 #ifndef CPUEMU_68000_ONLY
-{ CPUFUNC(op_f030_33), 0xf030, -1, { -3, 0 }, 0 }, /* MMUOP030 */
+{ CPUFUNC(op_f030_33), 0xf030, -1, { 0, 0 }, 0 }, /* MMUOP030 */
 #endif
 #ifndef CPUEMU_68000_ONLY
 { CPUFUNC(op_f038_33), 0xf038, -1, { 0, 0 }, 0 }, /* MMUOP030 */

@@ -3547,7 +3547,7 @@ static bool haltloop_do(int vsynctimeline, int rpt_end, int lines)
 					unset_special(SPCFLAG_BRK);
 	#ifdef DEBUGGER
 					if (debugging)
-						debug();
+						debug_();
 	#endif
 				}
 				return true;

@@ -1,19 +1,40 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "winuae", "winuae_msvc.vcxproj", "{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gencpu", "..\gencpu_msvc\gencpu_msvc.vcxproj", "{DEF7ACF7-050E-4069-BB99-5B5D93F60521}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		FullRelease|Win32 = FullRelease|Win32
 		Release|Win32 = Release|Win32
 		Test|Win32 = Test|Win32
+		TestRelease|Win32 = TestRelease|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.Debug|Win32.ActiveCfg = Test|Win32
+		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.Debug|Win32.Build.0 = Test|Win32
+		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.FullRelease|Win32.ActiveCfg = Release|Win32
+		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.FullRelease|Win32.Build.0 = Release|Win32
 		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.Release|Win32.ActiveCfg = Release|Win32
 		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.Release|Win32.Build.0 = Release|Win32
 		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.Test|Win32.ActiveCfg = Test|Win32
 		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.Test|Win32.Build.0 = Test|Win32
+		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.TestRelease|Win32.ActiveCfg = Release|Win32
+		{4ADAA943-1AC8-4FB5-82E5-4FB753B6C2DA}.TestRelease|Win32.Build.0 = Release|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.Debug|Win32.Build.0 = Debug|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.FullRelease|Win32.ActiveCfg = FullRelease|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.FullRelease|Win32.Build.0 = FullRelease|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.Release|Win32.ActiveCfg = Release|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.Release|Win32.Build.0 = Release|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.Test|Win32.ActiveCfg = Test|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.Test|Win32.Build.0 = Test|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.TestRelease|Win32.ActiveCfg = TestRelease|Win32
+		{DEF7ACF7-050E-4069-BB99-5B5D93F60521}.TestRelease|Win32.Build.0 = TestRelease|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

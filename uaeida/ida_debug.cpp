@@ -542,7 +542,7 @@ static int idaapi update_bpts(update_bpt_info_t *bpts, int nadd, int ndel)
 			mwn->val_enabled = 0;
 			mwn->val_mask = 0xffffffff;
 			mwn->val = 0;
-			mwn->access_mask = MW_MASK_CPU;
+			mwn->access_mask = MW_MASK_CPU_D_R | MW_MASK_CPU_D_W;
 			mwn->reg = 0xffffffff;
 			mwn->frozen = 0;
 			mwn->modval_written = 0;

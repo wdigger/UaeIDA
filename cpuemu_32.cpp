@@ -17457,9 +17457,6 @@ uae_u32 REGPARAM2 CPUFUNC(op_4e73_32)(uae_u32 opcode)
 		if (frame == 0x0) { m68k_areg (regs, 7) += offset; break; }
 		else if (frame == 0x1) { m68k_areg (regs, 7) += offset; }
 		else if (frame == 0x2) { m68k_areg (regs, 7) += offset + 4; break; }
-		else if (frame == 0x4) { m68k_areg (regs, 7) += offset + 8; break; }
-		else if (frame == 0x8) { m68k_areg (regs, 7) += offset + 50; break; }
-		else if (frame == 0x7) { m68k_areg (regs, 7) += offset + 52; break; }
 		else if (frame == 0x9) { m68k_areg (regs, 7) += offset + 12; break; }
 		else if (frame == 0xa) { m68k_do_rte_mmu030 (a); break; }
 		else if (frame == 0xb) { m68k_do_rte_mmu030 (a); break; }
