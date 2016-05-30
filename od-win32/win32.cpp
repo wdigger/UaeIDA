@@ -2489,6 +2489,10 @@ static void WIN32_UnregisterClasses (void)
 {
 	systray (hHiddenWnd, TRUE);
 	DestroyWindow (hHiddenWnd);
+    UnregisterClass(_T("AmigaPowah"), hInst);
+    UnregisterClass(_T("PCsuxRox"), hInst);
+    UnregisterClass(_T("Useless"), hInst);
+    UnregisterClass(_T("Blank"), hInst);
 }
 
 static int WIN32_RegisterClasses (void)

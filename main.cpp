@@ -783,6 +783,7 @@ void uae_quit (void)
 		ev.pid = 1;
 		ev.handled = true;
 		ev.exit_code = 0;
+        proc_found = false;
 
 		g_events.enqueue(ev, IN_BACK);
 	}

@@ -134,19 +134,26 @@ static void process_continue()
 
 }
 
-extern void resetIPC(void *vipc);
 static void process_exit()
 {
-	uae_quit();
-	deactivate_debugger();
-
     extern BOOL useinternalcmd;
     extern TCHAR internalcmd[MAX_LINEWIDTH + 1];
     extern int inputfinished;
 
+    activate_debugger();
+    _tcscpy(internalcmd, _T("x"));
+    useinternalcmd = TRUE;
+    inputfinished = 1;
+
     _tcscpy(internalcmd, _T("q"));
     useinternalcmd = TRUE;
     inputfinished = 1;
+
+    extern bool proc_found;
+    while (proc_found)
+    {
+        qsleep(10);
+    }
 
     if (uae_thread != NULL)
     {
