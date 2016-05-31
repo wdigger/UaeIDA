@@ -775,15 +775,15 @@ void uae_quit (void)
 	target_quit ();
 
 #ifdef C_IDA_DEBUG
-	extern bool proc_found;
-	if (proc_found)
+	extern bool exe_found;
+	if (exe_found)
 	{
 		debug_event_t ev;
 		ev.eid = PROCESS_EXIT;
 		ev.pid = 1;
 		ev.handled = true;
 		ev.exit_code = 0;
-        proc_found = false;
+		exe_found = false;
 
 		g_events.enqueue(ev, IN_BACK);
 	}

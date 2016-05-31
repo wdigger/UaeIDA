@@ -3,6 +3,7 @@
 #include <ida.hpp>
 #include <dbg.hpp>
 #include <diskio.hpp>
+#include <loader.hpp>
 
 #define get_long get_long_
 #define get_word get_word_
@@ -134,6 +135,9 @@ static void process_continue()
 
 }
 
+uint16 orbytes = 0;
+const char *process_path = NULL;
+
 static void process_exit()
 {
     extern BOOL useinternalcmd;
@@ -149,8 +153,8 @@ static void process_exit()
     useinternalcmd = TRUE;
     inputfinished = 1;
 
-    extern bool proc_found;
-    while (proc_found)
+    extern bool exe_found;
+    while (exe_found)
     {
         qsleep(10);
     }
@@ -161,6 +165,12 @@ static void process_exit()
         qthread_kill(uae_thread);
         uae_thread = NULL;
     }
+
+	int32 file_offset = get_fileregion_offset(inf.startIP);
+	FILE *fr = fopenM(process_path);
+	qfseek(fr, file_offset, SEEK_SET);
+	fwrite2bytes(fr, &orbytes, 1);
+	qfclose(fr);
 }
 
 /// Start an executable to debug.
@@ -178,12 +188,25 @@ static void process_exit()
 /// \retval -2                    file not found (ask for process options)
 /// \retval  1 | #CRC32_MISMATCH  ok, but the input file crc does not match
 /// \retval -1                    network error
-extern char proc_name[2048];
+extern char exe_name[2048];
 static int idaapi start_process(const char *path, const char *args, const char *startdir, int dbg_proc_flags, const char *input_path, uint32 input_file_crc32)
 {
 	g_events.clear();
 
-	qstrncpy(proc_name, args, sizeof(proc_name));
+	uint16 loop = 0x60FE;
+	int32 file_offset = get_fileregion_offset(inf.startIP);
+
+	process_path = path;
+	qstrncpy(exe_name, path, sizeof(exe_name));
+	get_root_filename(exe_name, sizeof(exe_name));
+	qstrlwr(exe_name);
+
+	FILE *fr = fopenM(path);
+	qfseek(fr, file_offset, SEEK_SET);
+	fread2bytes(fr, &orbytes, 1);
+	qfseek(fr, -2, SEEK_CUR);
+	fwrite2bytes(fr, &loop, 1);
+	qfclose(fr);
 
 	uae_thread = qthread_create(uae_process, NULL);
 
@@ -244,7 +267,6 @@ static int idaapi prepare_to_pause_process(void)
 static int idaapi uae_exit_process(void)
 {
     process_exit();
-
 	return 1;
 }
 

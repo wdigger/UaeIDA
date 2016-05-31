@@ -47,8 +47,8 @@
 #ifdef C_IDA_DEBUG
 #include "ida_debmod.h"
 extern eventlist_t g_events;
-char proc_name[2048];
-bool proc_found = false;
+char exe_name[2048];
+bool exe_found = false;
 #endif
 
 int debugger_active;
@@ -3541,7 +3541,7 @@ static void print_task_info (uaecptr node, bool nonactive)
 
 #ifdef C_IDA_DEBUG
 	char *name = (char*)get_real_address(get_long_debug(node + 10));
-	if (strnicmp(name, proc_name, sizeof(proc_name)) == 0)
+	if (strnicmp(name, exe_name, sizeof(exe_name)) == 0)
 	{
 		debug_event_t ev;
 		ev.eid = PROCESS_START;
@@ -3558,7 +3558,7 @@ static void print_task_info (uaecptr node, bool nonactive)
 
 		g_events.enqueue(ev, IN_BACK);
 
-		proc_found = true;
+		exe_found = true;
 
 		ev.eid = PROCESS_SUSPEND;
 		ev.pid = 1;
@@ -5082,7 +5082,7 @@ static void debug_1 (void)
 	TCHAR input[MAX_LINEWIDTH];
 
 #ifdef C_IDA_DEBUG
-	if (proc_found)
+	if (exe_found)
 	{
 		debug_event_t ev;
 		ev.pid = 1;
