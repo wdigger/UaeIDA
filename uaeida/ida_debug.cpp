@@ -224,7 +224,7 @@ static void idaapi rebase_if_required_to(ea_t new_base)
 	{
 		adiff_t delta = currentbase - imagebase;
 
-		int code = rebase_program(currentbase - imagebase, MSF_FIXONCE);
+		int code = rebase_program(delta, MSF_FIXONCE);
 		if (code != MOVE_SEGM_OK)
 		{
 			msg("Failed to rebase program, error code %d\n", code);
@@ -234,7 +234,7 @@ static void idaapi rebase_if_required_to(ea_t new_base)
 				"Please stop the debugger and rebase the program manually.\n"
 				"For that, please select the whole program and\n"
 				"use Edit, Segments, Rebase program with delta 0x%08a",
-				currentbase - imagebase);
+				delta);
 		}
 	}
 }
@@ -307,7 +307,8 @@ static int idaapi continue_after_event(const debug_event_t *event)
 	{
     case PROCESS_START:
     {
-        activate_debugger();
+		activate_debugger();
+		wordput(inf.startIP, orbytes);
     } break;
 	case BREAKPOINT:
 	case STEP:
@@ -371,6 +372,7 @@ static int idaapi uae_set_resume_mode(thid_t tid, resume_mode_t resmod)
 	extern TCHAR internalcmd[MAX_LINEWIDTH + 1];
 	extern int inputfinished;
 
+	activate_debugger();
 	switch (resmod)
 	{
 	case RESMOD_INTO:
@@ -628,7 +630,7 @@ debugger_t debugger =
 
 	"68000", // Required processor name
 
-	DBG_FLAG_NOHOST | DBG_FLAG_HWDATBPT_ONE | DBG_FLAG_CAN_CONT_BPT | DBG_FLAG_CLEAN_EXIT | DBG_FLAG_NOSTARTDIR | DBG_FLAG_NOPASSWORD | DBG_FLAG_ANYSIZE_HWBPT,
+	DBG_FLAG_NOHOST | DBG_FLAG_HWDATBPT_ONE | DBG_FLAG_CAN_CONT_BPT | DBG_FLAG_CLEAN_EXIT | DBG_FLAG_NOSTARTDIR | DBG_FLAG_NOPASSWORD | DBG_FLAG_ANYSIZE_HWBPT | DBG_FLAG_SAFE,
 
 	register_classes, // Array of register class names
 	REGS_GENERAL, // Mask of default printed register classes
