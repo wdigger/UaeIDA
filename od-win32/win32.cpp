@@ -2602,8 +2602,10 @@ int WIN32_CleanupLibraries (void)
 	if (hHtmlHelp)
 		FreeLibrary (hHtmlHelp);
 
+#ifndef C_IDA_DEBUG
 	if (hUIDLL)
 		FreeLibrary (hUIDLL);
+#endif
 	CoUninitialize ();
 	return 1;
 }
@@ -6072,6 +6074,11 @@ end:
 	return ok;
 }
 
+#ifdef C_IDA_DEBUG
+#include "ida_debmod.h"
+extern eventlist_t g_events;
+#endif
+
 static int PASCAL WinMain2 (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
 	HANDLE hMutex;
@@ -6223,6 +6230,20 @@ end:
 	for (i = 0; argv3 && argv3[i]; i++)
 		xfree (argv3[i]);
 	xfree (argv3);
+
+#ifdef C_IDA_DEBUG
+    extern bool exe_found;
+    debug_event_t ev;
+
+    ev.eid = PROCESS_EXIT;
+    ev.pid = 1;
+    ev.handled = true;
+    ev.exit_code = 0;
+    exe_found = false;
+
+    g_events.enqueue(ev, IN_BACK);
+#endif
+
 	return FALSE;
 }
 

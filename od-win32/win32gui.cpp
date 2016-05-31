@@ -10046,7 +10046,9 @@ static void misc_setlang (int v)
 	if (v == -2)
 		langid = -1;
 	regsetint (NULL, _T("Language"), langid);
+#ifndef C_IDA_DEBUG
 	FreeLibrary(hUIDLL);
+#endif
 	hUIDLL = NULL;
 	if (langid >= 0)
 		hUIDLL = language_load(langid);

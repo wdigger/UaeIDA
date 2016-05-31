@@ -3,7 +3,6 @@
 #include <ida.hpp>
 #include <dbg.hpp>
 #include <diskio.hpp>
-#include <loader.hpp>
 
 #define get_long get_long_
 #define get_word get_word_
@@ -135,9 +134,6 @@ static void process_continue()
 
 }
 
-uint16 orbytes = 0;
-const char *process_path = NULL;
-
 static void process_exit()
 {
     extern BOOL useinternalcmd;
@@ -166,11 +162,7 @@ static void process_exit()
         uae_thread = NULL;
     }
 
-	int32 file_offset = get_fileregion_offset(inf.startIP);
-	FILE *fr = fopenM(process_path);
-	qfseek(fr, file_offset, SEEK_SET);
-	fwrite2bytes(fr, &orbytes, 1);
-	qfclose(fr);
+    g_events.clear();
 }
 
 /// Start an executable to debug.
@@ -193,20 +185,8 @@ static int idaapi start_process(const char *path, const char *args, const char *
 {
 	g_events.clear();
 
-	uint16 loop = 0x60FE;
-	int32 file_offset = get_fileregion_offset(inf.startIP);
-
-	process_path = path;
 	qstrncpy(exe_name, path, sizeof(exe_name));
-	get_root_filename(exe_name, sizeof(exe_name));
 	qstrlwr(exe_name);
-
-	FILE *fr = fopenM(path);
-	qfseek(fr, file_offset, SEEK_SET);
-	fread2bytes(fr, &orbytes, 1);
-	qfseek(fr, -2, SEEK_CUR);
-	fwrite2bytes(fr, &loop, 1);
-	qfclose(fr);
 
 	uae_thread = qthread_create(uae_process, NULL);
 
@@ -284,7 +264,7 @@ static gdecode_t idaapi get_debug_event(debug_event_t *event, int timeout_ms)
 		// are there any pending events?
 		if (g_events.retrieve(event))
 		{
-			if (event->eid != STEP /*&& event->eid != BREAKPOINT*/ && event->eid != PROCESS_EXIT)
+			if (event->eid != STEP && event->eid != PROCESS_EXIT)
 			{
 				activate_debugger();
 			}
@@ -308,9 +288,7 @@ static int idaapi continue_after_event(const debug_event_t *event)
     case PROCESS_START:
     {
 		activate_debugger();
-		wordput(inf.startIP, orbytes);
     } break;
-	case BREAKPOINT:
 	case STEP:
 	case PROCESS_SUSPEND:
 	{
@@ -372,7 +350,7 @@ static int idaapi uae_set_resume_mode(thid_t tid, resume_mode_t resmod)
 	extern TCHAR internalcmd[MAX_LINEWIDTH + 1];
 	extern int inputfinished;
 
-	activate_debugger();
+	//activate_debugger();
 	switch (resmod)
 	{
 	case RESMOD_INTO:

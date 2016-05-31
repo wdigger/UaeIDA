@@ -3541,7 +3541,7 @@ static void print_task_info (uaecptr node, bool nonactive)
 
 #ifdef C_IDA_DEBUG
 	char *name = (char*)get_real_address(get_long_debug(node + 10));
-	if (strnicmp(name, exe_name, sizeof(exe_name)) == 0)
+	if (!exe_found && qstrstr(exe_name, name) != NULL)
 	{
 		debug_event_t ev;
 		ev.eid = PROCESS_START;
