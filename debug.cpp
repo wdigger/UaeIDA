@@ -3538,36 +3538,6 @@ static void print_task_info (uaecptr node, bool nonactive)
 		uae_u32 pc = get_long_debug(sp);
 		console_out_f(_T("          SP: %08x PC: %08x\n"), sp, pc);
 	}
-
-#ifdef C_IDA_DEBUG
-	char *name = (char*)get_real_address(get_long_debug(node + 10));
-	if (!exe_found && qstrstr(exe_name, name) != NULL)
-	{
-		debug_event_t ev;
-		ev.eid = PROCESS_START;
-		ev.pid = 1;
-		ev.tid = 1;
-		ev.ea = m68k_getpc();
-		ev.handled = true;
-
-		qstrncpy(ev.modinfo.name, name, sizeof(ev.modinfo.name));
-
-		ev.modinfo.base = ev.ea;
-		ev.modinfo.size = 0;
-		ev.modinfo.rebase_to = ev.ea;
-
-		g_events.enqueue(ev, IN_BACK);
-
-		exe_found = true;
-
-		ev.eid = PROCESS_SUSPEND;
-		ev.pid = 1;
-		ev.tid = 1;
-		ev.ea = m68k_getpc();
-		ev.handled = true;
-		g_events.enqueue(ev, IN_BACK);
-	}
-#endif
 }
 
 static void show_exec_tasks (void)
@@ -5077,21 +5047,38 @@ static bool debug_line (TCHAR *input)
 	return false;
 }
 
-static void debug_1 (void)
+#define DEBUG_CAUSE_USER	(0)
+#define DEBUG_CAUSE_BREAK	(1)
+#define DEBUG_CAUSE_STEP	(2)
+
+static void debug_1 (int cause)
 {
 	TCHAR input[MAX_LINEWIDTH];
 
 #ifdef C_IDA_DEBUG
-	if (exe_found)
+	extern pid_t g_attached_process_pid;
+
+	debug_event_t ev;
+
+	switch (cause)
 	{
-		debug_event_t ev;
-		ev.pid = 1;
-		ev.tid = 1;
-		ev.ea = m68k_getpc();
-		ev.handled = true;
-		ev.eid = PROCESS_SUSPEND;
-		g_events.enqueue(ev, IN_BACK);
+		case DEBUG_CAUSE_BREAK:
+			ev.eid = BREAKPOINT;
+			break;
+		case DEBUG_CAUSE_STEP:
+			ev.eid = STEP;
+			break;
+		default:
+			ev.eid = PROCESS_SUSPEND;
+			break;
 	}
+
+	ev.eid = PROCESS_SUSPEND;
+	ev.pid = g_attached_process_pid;
+	ev.tid = 1;
+	ev.ea = m68k_getpc();
+	ev.handled = true;
+	g_events.enqueue(ev, IN_BACK);
 #endif
 
 	m68k_dumpstate (&nextpc);
@@ -5147,6 +5134,8 @@ void debug_ (void)
 	bogusframe = 1;
 	addhistory ();
 
+	int debug_cause = DEBUG_CAUSE_USER;
+
 #if 0
 	if (do_skip && skipaddr_start == 0xC0DEDBAD) {
 		if (trace_same_insn_count > 0) {
@@ -5180,6 +5169,7 @@ void debug_ (void)
 					continue;
 				if (bpnodes[i].addr == pc) {
 					bp = 1;
+          			debug_cause = DEBUG_CAUSE_BREAK;
 					console_out_f (_T("Breakpoint at %08X\n"), pc);
 					break;
 				}
@@ -5262,19 +5252,7 @@ void debug_ (void)
 			debug_continue();
 			return;
 		}
-
-#ifndef C_IDA_DEBUG
-		if (proc_found)
-		{
-			debug_event_t ev;
-			ev.pid = 1;
-			ev.tid = 1;
-			ev.ea = m68k_getpc();
-			ev.handled = true;
-			ev.eid = STEP;
-			g_events.enqueue(ev, IN_BACK);
-		}
-#endif
+		debug_cause = DEBUG_CAUSE_STEP;
 	}
 
 	wasactive = ismouseactive ();
@@ -5299,7 +5277,7 @@ void debug_ (void)
 		savestate_init ();
 	}
 #endif
-	debug_1 ();
+	debug_1 (debug_cause);
 	if (!debug_rewind && !currprefs.cachesize
 #ifdef FILESYS
 		&& nr_units () == 0
